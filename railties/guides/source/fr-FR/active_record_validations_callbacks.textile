@@ -1,0 +1,1216 @@
+h2. Validations et Fonctions de Rappel <em>Active Record</em>
+
+Ce guide va vous enseigner la manière de pénétrer le cycle de vie des objets <em>Active Record</em>. Vous apprendrez comment valider l'état de vos objets avant de les enregistrer dans la base de données et comment effectuer des opérations personnalisées durant les différentes étapes du cycle de vie d'un objet.
+
+Après avoir lu ce guide et expérimenté les concepts présentés, nous espérons que vous serez capable de :
+
+* comprendre le cycle de vie des objets <em>Active Record</em>
+* utiliser les assistants (helpers) prédéfinis de validation 
+* créer vos propres méthodes de validation personnalisées
+* travailler avec les messages d'erreur générés par le processus de validation
+* créer des fonctions de rappel qui réagissent aux événements du cycle de vie d'un objet
+* créer des classes spéciales qui encapsulent le comportement usuel pour vos fonctions de rappel
+* créer des observateurs qui réagissent aux événements du cycle de vie en dehors de la classe originale
+
+endprologue.
+
+h3. Le Cycle de Vie d'un Objet
+
+Durant l'utilisation normale d'une application Rails, les objets peuvent être créés, mis à jour et détruits. <em>Active Record</em> fournit des points de branchement (hooks) dans le cycle de vie de l'objet afin que vous puissiez contrôler votre application et ses données.
+
+Les validations vous permettent de vous assurer que les données enregistrées dans votre base de données sont bien valides. Les fonctions de rappel et les assistants (helpers) vous permettent de déclencher une logique applicative avant ou après la modification de l'état d'un objet.
+
+h3. Vue d'ensemble des Validations
+
+Avant de vous plonger dans le détail des validations avec Rails, il vous faut comprendre un peu comment les validations se dessinent dans le tableau.
+
+h4. Pourquoi utiliser des validations ?
+
+Les validations servent à s'assurer que seules des données valides sont enregistrées dans la base de données. Par exemple, il peut s'avérer important pour votre application de s'assurer que chaque utilisateur fournisse une adresse e-mail une adresse postale valides.
+
+Plusieurs moyens de valider les données avant de les enregistrer dans la base sont disponibles, incluant les contraintes liées à la base de données, les validations effectuées du côté du client, les validations situées au niveau du contrôleur et les validations situées au niveau du modèle.
+
+* Les contraintes liées à la base de données et/ou aux procédures stockées rendent les mécanismes de validation dépendants de la base de données et peuvent rendre les tests et la maintenance plus difficile. Cependant, si votre base de données est utilisée par d'autres applications, cela peut être une bonne idée d'utiliser des contraintes au niveau de la base de données. De plus, les validations qui se situent au niveau de la base de données peuvent manipuler de façon sûre certaines choses (comme l'unicité pour les tables lourdement utilisées) qui peuvent être difficiles à implémenter autrement.
+* Les validations effectuées du côté du client sont utiles mais elles s'avèrent généralement peu fiables si elles sont utilisées seules. Si elles sont implémentées en utilisant Javascript, elles peuvent être court-circuitées si le Javascript est désactivé sur le navigateur de l'utilisateur. Cependant, si elles sont combinées avec d'autres techniques, les validations effectuées du côté du client fournissent aux utilisateurs un retour immédiat lorsqu'ils utilisent votre site.
+* Les validations situées au niveau du contrôleur peuvent être attirantes mais elles deviennent souvent lourdes et difficiles à tester et à maintenir. Dans la mesure du possible, c'est une bonne idée de "garder vos contrôleurs minces" : http://weblog.jamisbuck.org/2006/10/18/skinny-controller-fat-model ce qui vous permettra de continuer à prendre du plaisir en travaillant sur votre application dans le long terme.
+* Les validations situées au niveau du modèle restent la meilleure façon de s'assurer que seules des données valides sont enregistrées dans votre base de données. Elles sont <em>agnostiques</em> (c'est-à-dire qu'elles ne dépendent pas du moteur de base de données utilisé), elles ne peuvent pas être court-circuitées par les utilisateurs finaux et restent pratiques à tester et à maintenir. Rails les rend faciles à utiliser, fournit des assistants (helpers) prédéfinis pour les besoins usuels et vous autorise également à créer vos propres méthodes de validation.
+
+h4. A Quel Moment survient la Validation ?
+
+Il y a 2 sortes d'objets <em>Active Record</em> : ceux qui correspondent à une ligne de votre base de données et les autres. Quand vous initialisez un objet, par exemple en utilisant la méthode +new+, l'objet n'appartient pas encore à la base de données. Dès que vous invoquez la méthode +save+ de cet objet, il est enregistré dans la table correspondante de la base de données.<em>Active Record</em> utilise la méthode d'instance +new_record?+ pour déterminer si l'objet est déjà dans la base de données ou non. Considérons la simple classe <em>Active Record</em> suivante :
+
+<ruby>
+class Person < ActiveRecord::Base
+end
+</ruby>
+
+Nous pouvons voir comment elle fonctionne en regardant la sortie dans la +console rails+ :
+
+<shell>
+>> p = Person.new(:name => "John Doe")
+=> #<Person id: nil, name: "John Doe", created_at: nil, :updated_at: nil>
+>> p.new_record?
+=> true
+>> p.save
+=> true
+>> p.new_record?
+=> false
+</shell>
+
+La création et la sauvegarde d'un nouvel enregistrement va générer une commande SQL +INSERT+ pour la base de données. La mise à jour d'un enregistrement existant va générer une commande SQL +UPDATE+ à la place. Les validations sont généralement lancées avant que ces commandes ne soient envoyées à la base de données. Si les validations échouent, l'objet sera marqué comme invalide et <em>Active Record</em> n'exécutera pas la commande +INSERT+ ou +UPDATE+. Cela permet d'éviter l'enregistrement d'un objet invalide dans la base de données. Vous pouvez choisir d'avoir des validations spécifiques qui seront lancées lorsqu'un objet est créé, enregistré ou mis à jour.
+
+PRUDENCE : il existe de nombreuses manières de changer l'état d'un objet dans la base de données. Certaines méthodes vont déclencher des validations, mais certaines autres ne le feront pas. Cela signifie qu'il est possible d'enregistrer un objet dans la base de données dans un état invalide si vous n'y prenez pas suffisamment garde.
+
+Les méthodes suivantes déclenchent des validations et n'enregistreront l'objet dans la base de données uniquement dans le cas où l'objet est valide :
+
+* +create+
+* +create!+
+* +save+
+* +save!+
+* +update+
+* +update_attributes+
+* +update_attributes!+
+
+Les versions <em>bang</em> (avec le point d'exclamation à la fin, comme par exemple +save!+) soulèvent une exception si l'enregistrement est invalide. Les autres versions ne le font pas : +save+ et +update_attributes+ renvoient +false+, +create+ et +update+ renvoient juste les objets.
+
+h4. Contournement des Validations
+
+Les méthodes suivantes contournent les validations et enregistreront l'objet dans la base de données, quelle que soit sa validité. Elles doivent donc être utilisées avec précaution.
+
+* +decrement!+
+* +decrement_counter+
+* +increment!+
+* +increment_counter+
+* +toggle!+
+* +update_all+
+* +update_attribute+
+* +update_counters+
+
+Notez que +save+ peut également ne pas tenir compte des validations si on lui passe l'argument +:validate => false+. Cette technique doit être utilisée avec précaution.
+
+* +save(:validate => false)+
+
+h4. +valid?+ et +invalid?+
+
+Pour vérifier qu'un objet est valide ou non, Rails utilise la méthode +valid?+. Vous pouvez utiliser cette méthode. +valid?+ déclenche vos validations et renvoie <em>true</em> si aucune erreur n'a été ajoutée à l'objet, <em>false</em> dans le cas contraire.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+end
+
+Person.create(:name => "John Doe").valid? # => true
+Person.create(:name => nil).valid? # => false
+</ruby>
+
+Quand <em>Active Record</em> exécute les validations, n'importe quelle erreur peut être retrouvée au travers de la méthode d'instance +errors+. Par définition, un objet est valide si cette collection est vide après le lancement des validations.
+
+Notez qu'un objet instancié avec la méthode +new+ ne générera aucune erreur, même s'il est techniquement invalide. Car les validations ne sont pas lancées lors de l'appel à la méthode +new+.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+end
+
+>> p = Person.new
+=> #<Person id: nil, name: nil>
+>> p.errors
+=> {}
+
+>> p.valid?
+=> false
+>> p.errors
+=> {:name=>["can't be blank"]}
+
+>> p = Person.create
+=> #<Person id: nil, name: nil>
+>> p.errors
+=> {:name=>["can't be blank"]}
+
+>> p.save
+=> false
+
+>> p.save!
+=> ActiveRecord::RecordInvalid: Validation failed: Name can't be blank
+
+>> Person.create!
+=> ActiveRecord::RecordInvalid: Validation failed: Name can't be blank
+</ruby>
+
++invalid?+ est simplement le contraire de +valid?+. +invalid?+ déclenche vos validations et renvoie <em>true</em> si des erreurs ont été ajoutées à l'objet, <em>false</em> dans le cas contraire.
+
+h4(#validations_overview-errors). +errors[]+
+
+Pour savoir si un attribut particulier d'un objet est valide ou non, vous pouvez utiliser +errors[:attribute]+. Cette méthode renvoie un tableau de toutes les erreurs pour l'attribut +:attribute+. S'il n'y a pas d'erreur sur l'attribut spécifié, un tableau vide est renvoyé.
+
+Cette méthode est uniquement utile _après_ que les validations ont été lancées car elle scrute la collection d'erreurs mais ne déclenche pas les validations elle-même. Elle diffère de la méthode +ActiveRecord::Base#invalid?+ explicitée ci-dessus en ce sens qu'elle ne vérifie pas la validité de l'objet dans son intégralité. Elle ne contrôle que les éventuelles erreurs trouvées sur l'unique attribut de l'objet.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+end
+
+>> Person.new.errors[:name].any? # => false
+>> Person.create.errors[:name].any? # => true
+</ruby>
+
+Nous étudierons en profondeur les erreurs de validation dans la section "Working with Validation Errors":#working-with-validation-errors. Maintenant, arrêtons-nous sur les assistants pré-définis (helpers) que Rails fournit par défaut.
+
+h3. Assistants de Validation
+
+<em>Active Record</em> propose de nombreux assistants de validation prédéfinis que vous pouvez utiliser directement à l'intérieur de vos définitions de classe. Ces assistants fournissent des règles usuelles de validation. Chaque fois qu'une validation échoue, un message d'erreur est ajouté à la collection +errors+ de l'objet et ce message est associé au champ qui a été soumis à la validation.
+
+Chaque assistant accepte un nombre déterminé de noms d'attributs. Donc avec une seule ligne de code, vous pouvez affecter la même validation à plusieurs attributs.
+
+Tous les assistants acceptent les options +:on+ et +:message+ qui déterminent respectivement quand la validation doit être lancée et quel message devra être ajouté à la collection +errors+ en cas d'échec. L'option +:on+ prend une valeur parmi +:save+ (celle par défaut), +:create+ ou +:update+. Chaque assistant de validation possède son propre message d'erreur par défaut. Ces messages sont utilisés lorsque l'option +:message+ n'est pas définie. Jetons un oeil à chacun des assistants disponibles.
+
+h4. +validates_acceptance_of+
+
+Valide qu'une case à cocher sur l'interface utilisateur a bien été cochée quand le formulaire a été soumis. C'est typiquement le cas quand l'utilisateur doit accepter les termes d'utilisation d'une application, confirmer la lecture d'un texte ou n'importe quel concept similaire. Cette validation est propre aux applications web et cette 'acceptance' n'a pas besoin d'être enregistrée dans la base de données (si vous n'avez pas de champ pour elle, l'assistant créera juste un attribut virtuel).
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_acceptance_of :terms_of_service
+end
+</ruby>
+
+Le message d'erreur par défaut pour la méthode +validates_acceptance_of+ est "_must be accepted_".
+
+La méthode +validates_acceptance_of+ peut prendre en paramètres l'option +:accept+, qui détermine la valeur attendue pour que la validation se fasse. Par défaut, c'est la valeur "1", mais vous pouvez la changer.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_acceptance_of :terms_of_service, :accept => 'yes'
+end
+</ruby>
+
+h4. +validates_associated+
+
+Vous devriez utiliser cet assistant lorsque votre modèle possède des associations avec d'autres modèles et qu'ils nécessitent une validation. Quand vous tentez de sauvegarder votre objet, la méthode +valid?+ sera appelée pour tous les objets associés à l'objet initial.
+
+<ruby>
+class Library < ActiveRecord::Base
+  has_many :books
+  validates_associated :books
+end
+</ruby>
+
+Cette validation fonctionnera avec tous les types d'associations.
+
+PRUDENCE : N'utilisez pas l'assistant +validates_associated+ des 2 côtés de votre association. Sinon, les assistants vont s'appeler l'un et l'autre et vous obtiendrez une boucle infinie.
+
+Le message d'erreur par défaut pour l'assistant +validates_associated+ est "_is invalid_". Notez que chaque objet associé contiendra sa propre collection +errors+; les erreurs ne vont pas remonter dans le modèle appelant.
+
+h4. +validates_confirmation_of+
+
+Vous devriez utiliser cet assistant quand vous avez deux champs texte qui doivent recevoir exactement le même contenu. Par exemple, vous voulez confirmer une adresse e-mail ou un mot de passe. Cette validation va créer un attribut virtuel dont le nom sera le nom du champ texte qui doit être confirmé, auquel on ajoutera le suffixe "_confirmation".
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_confirmation_of :email
+end
+</ruby>
+
+Dans le gabarit de votre vue, vous devriez utiliser quelque chose comme
+
+<erb>
+<%= text_field :person, :email %>
+<%= text_field :person, :email_confirmation %>
+</erb>
+
+Ce test n'est exécute que si +email_confirmation+ n'est pas +nil+. Pour rendre la confirmation obligatoire, ajoutez un test de présence pour l'attribut de confirmation (nous verrons plus loin dans ce guide le détail de l'assistant +validates_presence_of+) :
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_confirmation_of :email
+  validates_presence_of :email_confirmation
+end
+</ruby>
+
+Le message d'erreur par défaut de l'assistant +validates_confirmation_of+ est "_doesn't match confirmation_".
+
+h4. +validates_exclusion_of+
+
+Cet assistant vérifie que la valeur des attributs n'appartient pas à un ensemble donné. En l'espèce, cet ensemble cela peut être un objet énumérable.
+
+<ruby>
+class Account < ActiveRecord::Base
+  validates_exclusion_of :subdomain, :in => %w(www us ca jp),
+    :message => "Subdomain %{value} is reserved."
+end
+</ruby>
+
+L'assistant +validates_exclusion_of+ possède une option +:in+ qui reçoit l'ensemble des valeurs qui ne seront pas autorisées pour les attributs validés. L'option +:in+ connaît un alias appelé +:within+ que vous pouvez utiliser en lieu et place si vous le préférez. L'exemple qui suit utilise l'option +:message+ pour vous montrer comment inclure la valeur de l'attribut.
+
+Le message d'erreur par défaut pour l'assistant +validates_exclusion_of+ est "_is reserved_".
+
+h4. +validates_format_of+
+
+Cet assistant vérifie que la valeur des attributs correspond à une expression régulière donnée, qui est spécifiée en utilisant l'option +:with+.
+
+<ruby>
+class Product < ActiveRecord::Base
+  validates_format_of :legacy_code, :with => /\A[a-zA-Z]+\z/,
+    :message => "Only letters allowed"
+end
+</ruby>
+
+Le message d'erreur par défaut pour l'assistant +validates_format_of+ est "_is invalid_".
+
+h4. +validates_inclusion_of+
+
+Cet assistant vérifie que la valeur des attributs appartient à un ensemble donné. En l'espèce, cet ensemble cela peut être un objet énumérable.
+
+<ruby>
+class Coffee < ActiveRecord::Base
+  validates_inclusion_of :size, :in => %w(small medium large),
+    :message => "%{value} is not a valid size"
+end
+</ruby>
+
+L'assistant +validates_inclusion_of+ possède une option +:in+ qui reçoit l'ensemble des valeurs qui seront autorisées pour les attributs validés. L'option +:in+ connaît un alias appelé +:within+ que vous pouvez utiliser en lieu et place si vous le préférez. L'exemple qui suit utilise l'option +:message+ pour vous montrer comment inclure la valeur de l'attribut.
+
+Le message d'erreur par défaut pour l'assistant +validates_inclusion_of+ est "_is reserved_".
+
+h4. +validates_length_of+
+
+This helper validates the length of the attributes' values. It provides a variety of options, so you can specify length constraints in different ways:
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_length_of :name, :minimum => 2
+  validates_length_of :bio, :maximum => 500
+  validates_length_of :password, :in => 6..20
+  validates_length_of :registration_number, :is => 6
+end
+</ruby>
+
+The possible length constraint options are:
+
+* +:minimum+ - The attribute cannot have less than the specified length.
+* +:maximum+ - The attribute cannot have more than the specified length.
+* +:in+ (or +:within+) - The attribute length must be included in a given interval. The value for this option must be a range.
+* +:is+ - The attribute length must be equal to the given value.
+
+The default error messages depend on the type of length validation being performed. You can personalize these messages using the +:wrong_length+, +:too_long+, and +:too_short+ options and <tt>%{count}</tt> as a placeholder for the number corresponding to the length constraint being used. You can still use the +:message+ option to specify an error message.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_length_of :bio, :maximum => 1000,
+    :too_long => "%{count} characters is the maximum allowed"
+end
+</ruby>
+
+This helper counts characters by default, but you can split the value in a different way using the +:tokenizer+ option:
+
+<ruby>
+class Essay < ActiveRecord::Base
+  validates_length_of :content,
+    :minimum   => 300,
+    :maximum   => 400,
+    :tokenizer => lambda { |str| str.scan(/\w+/) },
+    :too_short => "must have at least %{count} words",
+    :too_long  => "must have at most %{count} words"
+end
+</ruby>
+
+Note that the default error messages are plural (e.g., "is too short (minimum is %{count} characters)"). For this reason, when +:minimum+ is 1 you should provide a personalized message or use +validates_presence_of+ instead. When +:in+ or +:within+ have a lower limit of 1, you should either provide a personalized message or call +validates_presence_of+ prior to +validates_length_of+.
+
+The +validates_size_of+ helper is an alias for +validates_length_of+.
+
+h4. +validates_numericality_of+
+
+This helper validates that your attributes have only numeric values. By default, it will match an optional sign followed by an integral or floating point number. To specify that only integral numbers are allowed set +:only_integer+ to true.
+
+If you set +:only_integer+ to +true+, then it will use the
+
+<ruby>
+/\A[+-]?\d+\Z/
+</ruby>
+
+regular expression to validate the attribute's value. Otherwise, it will try to convert the value to a number using +Float+.
+
+WARNING. Note that the regular expression above allows a trailing newline character.
+
+<ruby>
+class Player < ActiveRecord::Base
+  validates_numericality_of :points
+  validates_numericality_of :games_played, :only_integer => true
+end
+</ruby>
+
+Besides +:only_integer+, the +validates_numericality_of+ helper also accepts the following options to add constraints to acceptable values:
+
+* +:greater_than+ - Specifies the value must be greater than the supplied value. The default error message for this option is "_must be greater than %{count}_".
+* +:greater_than_or_equal_to+ - Specifies the value must be greater than or equal to the supplied value. The default error message for this option is "_must be greater than or equal to %{count}_".
+* +:equal_to+ - Specifies the value must be equal to the supplied value. The default error message for this option is "_must be equal to %{count}_".
+* +:less_than+ - Specifies the value must be less than the supplied value. The default error message for this option is "_must be less than %{count}_".
+* +:less_than_or_equal_to+ - Specifies the value must be less than or equal the supplied value. The default error message for this option is "_must be less than or equal to %{count}_".
+* +:odd+ - Specifies the value must be an odd number if set to true. The default error message for this option is "_must be odd_".
+* +:even+ - Specifies the value must be an even number if set to true. The default error message for this option is "_must be even_".
+
+The default error message for +validates_numericality_of+ is "_is not a number_".
+
+h4. +validates_presence_of+
+
+This helper validates that the specified attributes are not empty. It uses the +blank?+ method to check if the value is either +nil+ or a blank string, that is, a string that is either empty or consists of whitespace.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :login, :email, :presence => true
+end
+</ruby>
+
+If you want to be sure that an association is present, you'll need to test whether the foreign key used to map the association is present, and not the associated object itself.
+
+<ruby>
+class LineItem < ActiveRecord::Base
+  belongs_to :order
+  validates_presence_of :order_id
+end
+</ruby>
+
+Since +false.blank?+ is true, if you want to validate the presence of a boolean field you should use +validates_inclusion_of :field_name, :in => [true, false]+.
+
+The default error message for +validates_presence_of+ is "_can't be empty_".
+
+h4. +validates_uniqueness_of+
+
+This helper validates that the attribute's value is unique right before the object gets saved. It does not create a uniqueness constraint in the database, so it may happen that two different database connections create two records with the same value for a column that you intend to be unique. To avoid that, you must create a unique index in your database.
+
+<ruby>
+class Account < ActiveRecord::Base
+  validates_uniqueness_of :email
+end
+</ruby>
+
+The validation happens by performing an SQL query into the model's table, searching for an existing record with the same value in that attribute.
+
+There is a +:scope+ option that you can use to specify other attributes that are used to limit the uniqueness check:
+
+<ruby>
+class Holiday < ActiveRecord::Base
+  validates_uniqueness_of :name, :scope => :year,
+    :message => "should happen once per year"
+end
+</ruby>
+
+There is also a +:case_sensitive+ option that you can use to define whether the uniqueness constraint will be case sensitive or not. This option defaults to true.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_uniqueness_of :name, :case_sensitive => false
+end
+</ruby>
+
+WARNING. Note that some databases are configured to perform case-insensitive searches anyway.
+
+The default error message for +validates_uniqueness_of+ is "_has already been taken_".
+
+h4. +validates_with+
+
+This helper passes the record to a separate class for validation.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_with GoodnessValidator
+end
+
+class GoodnessValidator < ActiveModel::Validator
+  def validate(record)
+    if record.first_name == "Evil"
+      record.errors[:base] << "This person is evil"
+    end
+  end
+end
+</ruby>
+
+The +validates_with+ helper takes a class, or a list of classes to use for validation. There is no default error message for +validates_with+. You must manually add errors to the record's errors collection in the validator class.
+
+To implement the validate method, you must have an +record+ parameter defined, which is the record to be validated.
+
+Like all other validations, +validates_with+ takes the +:if+, +:unless+ and +:on+ options. If you pass any other options, it will send those options to the validator class as +options+:
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_with GoodnessValidator, :fields => [:first_name, :last_name]
+end
+
+class GoodnessValidator < ActiveModel::Validator
+  def validate(record)
+    if options[:fields].any?{|field| record.send(field) == "Evil" }
+      record.errors[:base] << "This person is evil"
+    end
+  end
+end
+</ruby>
+
+h4. +validates_each+
+
+This helper validates attributes against a block. It doesn't have a predefined validation function. You should create one using a block, and every attribute passed to +validates_each+ will be tested against it. In the following example, we don't want names and surnames to begin with lower case.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_each :name, :surname do |model, attr, value|
+    model.errors.add(attr, 'must start with upper case') if value =~ /\A[a-z]/
+  end
+end
+</ruby>
+
+The block receives the model, the attribute's name and the attribute's value. You can do anything you like to check for valid data within the block. If your validation fails, you can add an error message to the model, therefore making it invalid.
+
+h3. Common Validation Options
+
+There are some common options that all the validation helpers can use. Here they are, except for the +:if+ and +:unless+ options, which are discussed later in "Conditional Validation":#conditional-validation.
+
+h4. +:allow_nil+
+
+The +:allow_nil+ option skips the validation when the value being validated is +nil+. Using +:allow_nil+ with +validates_presence_of+ allows for +nil+, but any other +blank?+ value will still be rejected.
+
+<ruby>
+class Coffee < ActiveRecord::Base
+  validates_inclusion_of :size, :in => %w(small medium large),
+    :message => "%{value} is not a valid size", :allow_nil => true
+end
+</ruby>
+
+h4. +:allow_blank+
+
+The +:allow_blank+ option is similar to the +:allow_nil+ option. This option will let validation pass if the attribute's value is +blank?+, like +nil+ or an empty string for example.
+
+<ruby>
+class Topic < ActiveRecord::Base
+  validates_length_of :title, :is => 5, :allow_blank => true
+end
+
+Topic.create("title" => "").valid? # => true
+Topic.create("title" => nil).valid? # => true
+</ruby>
+
+h4. +:message+
+
+As you've already seen, the +:message+ option lets you specify the message that will be added to the +errors+ collection when validation fails. When this option is not used, Active Record will use the respective default error message for each validation helper.
+
+h4. +:on+
+
+The +:on+ option lets you specify when the validation should happen. The default behavior for all the built-in validation helpers is to be run on save (both when you're creating a new record and when you're updating it). If you want to change it, you can use +:on => :create+ to run the validation only when a new record is created or +:on => :update+ to run the validation only when a record is updated.
+
+<ruby>
+class Person < ActiveRecord::Base
+  # it will be possible to update email with a duplicated value
+  validates_uniqueness_of :email, :on => :create
+
+  # it will be possible to create the record with a non-numerical age
+  validates_numericality_of :age, :on => :update
+
+  # the default (validates on both create and update)
+  validates :name, :presence => true, :on => :save
+end
+</ruby>
+
+h3. Conditional Validation
+
+Sometimes it will make sense to validate an object just when a given predicate is satisfied. You can do that by using the +:if+ and +:unless+ options, which can take a symbol, a string or a +Proc+. You may use the +:if+ option when you want to specify when the validation *should* happen. If you want to specify when the validation *should not* happen, then you may use the +:unless+ option.
+
+h4. Using a Symbol with +:if+ and +:unless+
+
+You can associate the +:if+ and +:unless+ options with a symbol corresponding to the name of a method that will get called right before validation happens. This is the most commonly used option.
+
+<ruby>
+class Order < ActiveRecord::Base
+  validates_presence_of :card_number, :if => :paid_with_card?
+
+  def paid_with_card?
+    payment_type == "card"
+  end
+end
+</ruby>
+
+h4. Using a String with +:if+ and +:unless+
+
+You can also use a string that will be evaluated using +eval+ and needs to contain valid Ruby code. You should use this option only when the string represents a really short condition.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates_presence_of :surname, :if => "name.nil?"
+end
+</ruby>
+
+h4. Using a Proc with +:if+ and +:unless+
+
+Finally, it's possible to associate +:if+ and +:unless+ with a +Proc+ object which will be called. Using a +Proc+ object gives you the ability to write an inline condition instead of a separate method. This option is best suited for one-liners.
+
+<ruby>
+class Account < ActiveRecord::Base
+  validates_confirmation_of :password,
+    :unless => Proc.new { |a| a.password.blank? }
+end
+</ruby>
+
+h3. Creating Custom Validation Methods
+
+When the built-in validation helpers are not enough for your needs, you can write your own validation methods.
+
+Simply create methods that verify the state of your models and add messages to the +errors+ collection when they are invalid. You must then register these methods by using one or more of the +validate+, +validate_on_create+ or +validate_on_update+ class methods, passing in the symbols for the validation methods' names.
+
+You can pass more than one symbol for each class method and the respective validations will be run in the same order as they were registered.
+
+<ruby>
+class Invoice < ActiveRecord::Base
+  validate :expiration_date_cannot_be_in_the_past,
+    :discount_cannot_be_greater_than_total_value
+
+  def expiration_date_cannot_be_in_the_past
+    errors.add(:expiration_date, "can't be in the past") if
+      !expiration_date.blank? and expiration_date < Date.today
+  end
+
+  def discount_cannot_be_greater_than_total_value
+    errors.add(:discount, "can't be greater than total value") if
+      discount > total_value
+  end
+end
+</ruby>
+
+You can even create your own validation helpers and reuse them in several different models. For example, an application that manages surveys may find it useful to express that a certain field corresponds to a set of choices:
+
+<ruby>
+ActiveRecord::Base.class_eval do
+  def self.validates_as_choice(attr_name, n, options={})
+    validates_inclusion_of attr_name, {:in => 1..n}.merge(options)
+  end
+end
+</ruby>
+
+Simply reopen +ActiveRecord::Base+ and define a class method like that. You'd typically put this code somewhere in +config/initializers+. You can use this helper like this:
+
+<ruby>
+class Movie < ActiveRecord::Base
+  validates_as_choice :rating, 5
+end
+</ruby>
+
+h3. Working with Validation Errors
+
+In addition to the +valid?+ and +invalid?+ methods covered earlier, Rails provides a number of methods for working with the +errors+ collection and inquiring about the validity of objects.
+
+The following is a list of the most commonly used methods. Please refer to the +ActiveRecord::Errors+ documentation for a list of all the available methods.
+
+h4(#working_with_validation_errors-errors). +errors+
+
+Returns an OrderedHash with all errors. Each key is the attribute name and the value is an array of strings with all errors.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+  validates_length_of :name, :minimum => 3
+end
+
+person = Person.new
+person.valid? # => false
+person.errors
+ # => {:name => ["can't be blank", "is too short (minimum is 3 characters)"]}
+
+person = Person.new(:name => "John Doe")
+person.valid? # => true
+person.errors # => []
+</ruby>
+
+h4(#working_with_validation_errors-errors-2). +errors[]+
+
++errors[]+ is used when you want to check the error messages for a specific attribute. It returns an array of strings with all error messages for the given attribute, each string with one error message. If there are no errors related to the attribute, it returns an empty array.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+  validates_length_of :name, :minimum => 3
+end
+
+person = Person.new(:name => "John Doe")
+person.valid? # => true
+person.errors[:name] # => []
+
+person = Person.new(:name => "JD")
+person.valid? # => false
+person.errors[:name] # => ["is too short (minimum is 3 characters)"]
+
+person = Person.new
+person.valid? # => false
+person.errors[:name]
+ # => ["can't be blank", "is too short (minimum is 3 characters)"]
+</ruby>
+
+h4. +errors.add+
+
+The +add+ method lets you manually add messages that are related to particular attributes. You can use the +errors.full_messages+ or +errors.to_a+ methods to view the messages in the form they might be displayed to a user. Those particular messages get the attribute name prepended (and capitalized). +add+ receives the name of the attribute you want to add the message to, and the message itself.
+
+<ruby>
+class Person < ActiveRecord::Base
+  def a_method_used_for_validation_purposes
+    errors.add(:name, "cannot contain the characters !@#%*()_-+=")
+  end
+end
+
+person = Person.create(:name => "!@#")
+
+person.errors[:name]
+ # => ["cannot contain the characters !@#%*()_-+="]
+
+person.errors.full_messages
+ # => ["Name cannot contain the characters !@#%*()_-+="]
+</ruby>
+
+Another way to do this is using +[]=+ setter
+
+<ruby>
+  class Person < ActiveRecord::Base
+    def a_method_used_for_validation_purposes
+      errors[:name] = "cannot contain the characters !@#%*()_-+="
+    end
+  end
+
+  person = Person.create(:name => "!@#")
+
+  person.errors[:name]
+   # => ["cannot contain the characters !@#%*()_-+="]
+
+  person.errors.to_a
+   # => ["Name cannot contain the characters !@#%*()_-+="]
+</ruby>
+
+h4. +errors[:base]+
+
+You can add error messages that are related to the object's state as a whole, instead of being related to a specific attribute. You can use this method when you want to say that the object is invalid, no matter the values of its attributes. Since +errors[:base]+ is an array, you can simply add a string to the array and uses it as the error message.
+
+<ruby>
+class Person < ActiveRecord::Base
+  def a_method_used_for_validation_purposes
+    errors[:base] << "This person is invalid because ..."
+  end
+end
+</ruby>
+
+
+
+h4. +errors.clear+
+
+The +clear+ method is used when you intentionally want to clear all the messages in the +errors+ collection. Of course, calling +errors.clear+ upon an invalid object won't actually make it valid: the +errors+ collection will now be empty, but the next time you call +valid?+ or any method that tries to save this object to the database, the validations will run again. If any of the validations fail, the +errors+ collection will be filled again.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+  validates_length_of :name, :minimum => 3
+end
+
+person = Person.new
+person.valid? # => false
+person.errors[:name]
+ # => ["can't be blank", "is too short (minimum is 3 characters)"]
+
+person.errors.clear
+person.errors.empty? # => true
+
+p.save # => false
+
+p.errors[:name]
+ # => ["can't be blank", "is too short (minimum is 3 characters)"]
+</ruby>
+
+h4. +errors.size+
+
+The +size+ method returns the total number of error messages for the object.
+
+<ruby>
+class Person < ActiveRecord::Base
+  validates :name, :presence => true
+  validates_length_of   :name, :minimum => 3
+  validates_presence_of :email
+end
+
+person = Person.new
+person.valid? # => false
+person.errors.size # => 3
+
+person = Person.new(:name => "Andrea", :email => "andrea@example.com")
+person.valid? # => true
+person.errors.size # => 0
+</ruby>
+
+h3. Displaying Validation Errors in the View
+
+Rails maintains an official plugin that provides helpers to display the error messages of your models in your view templates. You can install it as a plugin or as a Gem.
+
+h4. Installing as a plugin
+<shell>
+$ rails plugin install git://github.com/rails/dynamic_form.git
+</shell>
+
+h4 Installing as a Gem
+Add this line on your Gemfile:
+<ruby>
+gem "dynamic_form"
+</ruby>
+
+Now you will have access to these two methods in your view templates:
+
+h4. +error_messages+ and +error_messages_for+
+
+When creating a form with the +form_for+ helper, you can use the +error_messages+ method on the form builder to render all failed validation messages for the current model instance.
+
+<ruby>
+class Product < ActiveRecord::Base
+  validates_presence_of :description, :value
+  validates_numericality_of :value, :allow_nil => true
+end
+</ruby>
+
+<erb>
+<%= form_for(@product) do |f| %>
+  <%= f.error_messages %>
+  <p>
+    <%= f.label :description %><br />
+    <%= f.text_field :description %>
+  </p>
+  <p>
+    <%= f.label :value %><br />
+    <%= f.text_field :value %>
+  </p>
+  <p>
+    <%= f.submit "Create" %>
+  </p>
+<% end %>
+</erb>
+
+To get the idea, if you submit the form with empty fields you typically get this back, though styles are indeed missing by default:
+
+!images/error_messages.png(Error messages)!
+
+You can also use the +error_messages_for+ helper to display the error messages of a model assigned to a view template. It's very similar to the previous example and will achieve exactly the same result.
+
+<erb>
+<%= error_messages_for :product %>
+</erb>
+
+The displayed text for each error message will always be formed by the capitalized name of the attribute that holds the error, followed by the error message itself.
+
+Both the +form.error_messages+ and the +error_messages_for+ helpers accept options that let you customize the +div+ element that holds the messages, changing the header text, the message below the header text and the tag used for the element that defines the header.
+
+<erb>
+<%= f.error_messages :header_message => "Invalid product!",
+  :message => "You'll need to fix the following fields:",
+  :header_tag => :h3 %>
+</erb>
+
+Which results in the following content:
+
+!images/customized_error_messages.png(Customized error messages)!
+
+If you pass +nil+ to any of these options, it will get rid of the respective section of the +div+.
+
+h4. Customizing the Error Messages CSS
+
+The selectors to customize the style of error messages are:
+
+* +.field_with_errors+ - Style for the form fields and labels with errors.
+* +#errorExplanation+ - Style for the +div+ element with the error messages.
+* +#errorExplanation h2+ - Style for the header of the +div+ element.
+* +#errorExplanation p+ - Style for the paragraph that holds the message that appears right below the header of the +div+ element.
+* +#errorExplanation ul li+ - Style for the list items with individual error messages.
+
+Scaffolding for example generates +public/stylesheets/scaffold.css+, which defines the red-based style you saw above.
+
+The name of the class and the id can be changed with the +:class+ and +:id+ options, accepted by both helpers.
+
+h4. Customizing the Error Messages HTML
+
+By default, form fields with errors are displayed enclosed by a +div+ element with the +field_with_errors+ CSS class. However, it's possible to override that.
+
+The way form fields with errors are treated is defined by +ActionView::Base.field_error_proc+. This is a +Proc+ that receives two parameters:
+
+* A string with the HTML tag
+* An instance of +ActionView::Helpers::InstanceTag+.
+
+Here is a simple example where we change the Rails behaviour to always display the error messages in front of each of the form fields with errors. The error messages will be enclosed by a +span+ element with a +validation-error+ CSS class. There will be no +div+ element enclosing the +input+ element, so we get rid of that red border around the text field. You can use the +validation-error+ CSS class to style it anyway you want.
+
+<ruby>
+ActionView::Base.field_error_proc = Proc.new do |html_tag, instance|
+  if instance.error_message.kind_of?(Array)
+    %(#{html_tag}<span class="validation-error">&nbsp;
+      #{instance.error_message.join(',')}</span>).html_safe
+  else
+    %(#{html_tag}<span class="validation-error">&nbsp;
+      #{instance.error_message}</span>).html_safe
+  end
+end
+</ruby>
+
+This will result in something like the following:
+
+!images/validation_error_messages.png(Validation error messages)!
+
+h3. Callbacks Overview
+
+Callbacks are methods that get called at certain moments of an object's life cycle. With callbacks it's possible to write code that will run whenever an Active Record object is created, saved, updated, deleted, validated, or loaded from the database.
+
+h4. Callback Registration
+
+In order to use the available callbacks, you need to register them. You can do that by implementing them as ordinary methods, and then using a macro-style class method to register them as callbacks.
+
+<ruby>
+class User < ActiveRecord::Base
+  validates_presence_of :login, :email
+
+  before_validation :ensure_login_has_a_value
+
+  protected
+  def ensure_login_has_a_value
+    if login.nil?
+      self.login = email unless email.blank?
+    end
+  end
+end
+</ruby>
+
+The macro-style class methods can also receive a block. Consider using this style if the code inside your block is so short that it fits in just one line.
+
+<ruby>
+class User < ActiveRecord::Base
+  validates_presence_of :login, :email
+
+  before_create {|user| user.name = user.login.capitalize
+	if user.name.blank?}
+end
+</ruby>
+
+It's considered good practice to declare callback methods as being protected or private. If left public, they can be called from outside of the model and violate the principle of object encapsulation.
+
+h3. Available Callbacks
+
+Here is a list with all the available Active Record callbacks, listed in the same order in which they will get called during the respective operations:
+
+h4. Creating an Object
+
+* +before_validation+
+* +after_validation+
+* +before_save+
+* +after_save+
+* +before_create+
+* +around_create+
+* +after_create+
+
+h4. Updating an Object
+
+* +before_validation+
+* +after_validation+
+* +before_save+
+* +after_save+
+* +before_update+
+* +around_update+
+* +after_update+
+
+h4. Destroying an Object
+
+* +before_destroy+
+* +after_destroy+
+* +around_destroy+
+
+WARNING. +after_save+ runs both on create and update, but always _after_ the more specific callbacks +after_create+ and +after_update+, no matter the order in which the macro calls were executed.
+
+h4. +after_initialize+ and +after_find+
+
+The +after_initialize+ callback will be called whenever an Active Record object is instantiated, either by directly using +new+ or when a record is loaded from the database. It can be useful to avoid the need to directly override your Active Record +initialize+ method.
+
+The +after_find+ callback will be called whenever Active Record loads a record from the database. +after_find+ is called before +after_initialize+ if both are defined.
+
+The +after_initialize+ and +after_find+ callbacks are a bit different from the others. They have no +before_*+ counterparts, and the only way to register them is by defining them as regular methods. If you try to register +after_initialize+ or +after_find+ using macro-style class methods, they will just be ignored. This behaviour is due to performance reasons, since +after_initialize+ and +after_find+ will both be called for each record found in the database, significantly slowing down the queries.
+
+<ruby>
+class User < ActiveRecord::Base
+  def after_initialize
+    puts "You have initialized an object!"
+  end
+
+  def after_find
+    puts "You have found an object!"
+  end
+end
+
+>> User.new
+You have initialized an object!
+=> #<User id: nil>
+
+>> User.first
+You have found an object!
+You have initialized an object!
+=> #<User id: 1>
+</ruby>
+
+h3. Running Callbacks
+
+The following methods trigger callbacks:
+
+* +create+
+* +create!+
+* +decrement!+
+* +destroy+
+* +destroy_all+
+* +increment!+
+* +save+
+* +save!+
+* +save(false)+
+* +toggle!+
+* +update+
+* +update_attribute+
+* +update_attributes+
+* +update_attributes!+
+* +valid?+
+
+Additionally, the +after_find+ callback is triggered by the following finder methods:
+
+* +all+
+* +first+
+* +find+
+* +find_all_by_<em>attribute</em>+
+* +find_by_<em>attribute</em>+
+* +find_by_<em>attribute</em>!+
+* +last+
+
+The +after_initialize+ callback is triggered every time a new object of the class is initialized.
+
+h3. Skipping Callbacks
+
+Just as with validations, it's also possible to skip callbacks. These methods should be used with caution, however, because important business rules and application logic may be kept in callbacks. Bypassing them without understanding the potential implications may lead to invalid data.
+
+* +decrement+
+* +decrement_counter+
+* +delete+
+* +delete_all+
+* +find_by_sql+
+* +increment+
+* +increment_counter+
+* +toggle+
+* +update_all+
+* +update_counters+
+
+h3. Halting Execution
+
+As you start registering new callbacks for your models, they will be queued for execution. This queue will include all your model's validations, the registered callbacks, and the database operation to be executed.
+
+The whole callback chain is wrapped in a transaction. If any <em>before</em> callback method returns exactly +false+ or raises an exception the execution chain gets halted and a ROLLBACK is issued; <em>after</em> callbacks can only accomplish that by raising an exception.
+
+WARNING. Raising an arbitrary exception may break code that expects +save+ and friends not to fail like that. The +ActiveRecord::Rollback+ exception is thought precisely to tell Active Record a rollback is going on. That one is internally captured but not reraised.
+
+h3. Relational Callbacks
+
+Callbacks work through model relationships, and can even be defined by them. Let's take an example where a user has many posts. In our example, a user's posts should be destroyed if the user is destroyed. So, we'll add an +after_destroy+ callback to the +User+ model by way of its relationship to the +Post+ model.
+
+<ruby>
+class User < ActiveRecord::Base
+  has_many :posts, :dependent => :destroy
+end
+
+class Post < ActiveRecord::Base
+  after_destroy :log_destroy_action
+
+  def log_destroy_action
+    puts 'Post destroyed'
+  end
+end
+
+>> user = User.first
+=> #<User id: 1>
+>> user.posts.create!
+=> #<Post id: 1, user_id: 1>
+>> user.destroy
+Post destroyed
+=> #<User id: 1>
+</ruby>
+
+h3. Conditional Callbacks
+
+Like in validations, we can also make our callbacks conditional, calling them only when a given predicate is satisfied. You can do that by using the +:if+ and +:unless+ options, which can take a symbol, a string or a +Proc+. You may use the +:if+ option when you want to specify when the callback *should* get called. If you want to specify when the callback *should not* be called, then you may use the +:unless+ option.
+
+h4. Using +:if+ and +:unless+ with a Symbol
+
+You can associate the +:if+ and +:unless+ options with a symbol corresponding to the name of a method that will get called right before the callback. When using the +:if+ option, the callback won't be executed if the method returns false; when using the +:unless+ option, the callback won't be executed if the method returns true. This is the most common option. Using this form of registration it's also possible to register several different methods that should be called to check if the callback should be executed.
+
+<ruby>
+class Order < ActiveRecord::Base
+  before_save :normalize_card_number, :if => :paid_with_card?
+end
+</ruby>
+
+h4. Using +:if+ and +:unless+ with a String
+
+You can also use a string that will be evaluated using +eval+ and needs to contain valid Ruby code. You should use this option only when the string represents a really short condition.
+
+<ruby>
+class Order < ActiveRecord::Base
+  before_save :normalize_card_number, :if => "paid_with_card?"
+end
+</ruby>
+
+h4. Using +:if+ and +:unless+ with a Proc
+
+Finally, it's possible to associate +:if+ and +:unless+ with a +Proc+ object. This option is best suited when writing short validation methods, usually one-liners.
+
+<ruby>
+class Order < ActiveRecord::Base
+  before_save :normalize_card_number,
+    :if => Proc.new { |order| order.paid_with_card? }
+end
+</ruby>
+
+h4. Multiple Conditions for Callbacks
+
+When writing conditional callbacks, it's possible to mix both +:if+ and +:unless+ in the same callback declaration.
+
+<ruby>
+class Comment < ActiveRecord::Base
+  after_create :send_email_to_author, :if => :author_wants_emails?,
+    :unless => Proc.new { |comment| comment.post.ignore_comments? }
+end
+</ruby>
+
+h3. Callback Classes
+
+Sometimes the callback methods that you'll write will be useful enough to be reused by other models. Active Record makes it possible to create classes that encapsulate the callback methods, so it becomes very easy to reuse them.
+
+Here's an example where we create a class with an +after_destroy+ callback for a +PictureFile+ model.
+
+<ruby>
+class PictureFileCallbacks
+  def after_destroy(picture_file)
+    File.delete(picture_file.filepath)
+      if File.exists?(picture_file.filepath)
+  end
+end
+</ruby>
+
+When declared inside a class the callback method will receive the model object as a parameter. We can now use it this way:
+
+<ruby>
+class PictureFile < ActiveRecord::Base
+  after_destroy PictureFileCallbacks.new
+end
+</ruby>
+
+Note that we needed to instantiate a new +PictureFileCallbacks+ object, since we declared our callback as an instance method. Sometimes it will make more sense to have it as a class method.
+
+<ruby>
+class PictureFileCallbacks
+  def self.after_destroy(picture_file)
+    File.delete(picture_file.filepath)
+      if File.exists?(picture_file.filepath)
+  end
+end
+</ruby>
+
+If the callback method is declared this way, it won't be necessary to instantiate a +PictureFileCallbacks+ object.
+
+<ruby>
+class PictureFile < ActiveRecord::Base
+  after_destroy PictureFileCallbacks
+end
+</ruby>
+
+You can declare as many callbacks as you want inside your callback classes.
+
+h3. Observers
+
+Observers are similar to callbacks, but with important differences. Whereas callbacks can pollute a model with code that isn't directly related to its purpose, observers allow you to add the same functionality outside of a model. For example, it could be argued that a +User+ model should not include code to send registration confirmation emails. Whenever you use callbacks with code that isn't directly related to your model, you may want to consider creating an observer instead.
+
+h4. Creating Observers
+
+For example, imagine a +User+ model where we want to send an email every time a new user is created. Because sending emails is not directly related to our model's purpose, we could create an observer to contain this functionality.
+
+<shell>
+$ rails generate observer User
+</shell>
+
+<ruby>
+class UserObserver < ActiveRecord::Observer
+  def after_create(model)
+    # code to send confirmation email...
+  end
+end
+</ruby>
+
+As with callback classes, the observer's methods receive the observed model as a parameter.
+
+h4. Registering Observers
+
+Observers are conventionally placed inside of your +app/models+ directory and registered in your application's +config/application.rb+ file. For example, the +UserObserver+ above would be saved as +app/models/user_observer.rb+ and registered in +config/application.rb+ this way:
+
+<ruby>
+# Activate observers that should always be running
+config.active_record.observers = :user_observer
+</ruby>
+
+As usual, settings in +config/environments+ take precedence over those in +config/application.rb+. So, if you prefer that an observer doesn't run in all environments, you can simply register it in a specific environment instead.
+
+h4. Sharing Observers
+
+By default, Rails will simply strip "Observer" from an observer's name to find the model it should observe. However, observers can also be used to add behaviour to more than one model, and so it's possible to manually specify the models that our observer should observe.
+
+<ruby>
+class MailerObserver < ActiveRecord::Observer
+  observe :registration, :user
+
+  def after_create(model)
+    # code to send confirmation email...
+  end
+end
+</ruby>
+
+In this example, the +after_create+ method would be called whenever a +Registration+ or +User+ was created. Note that this new +MailerObserver+ would also need to be registered in +config/application.rb+ in order to take effect.
+
+<ruby>
+# Activate observers that should always be running
+config.active_record.observers = :mailer_observer
+</ruby>
+
+h3. Transaction Callbacks
+
+There are two additional callbacks that are triggered by the completion of a database transaction: +after_commit+ and +after_rollback+. These callbacks are very similar to the +after_save+ callback except that they don't execute until after database changes have either been committed or rolled back. They are most useful when your active record models need to interact with external systems which are not part of the database transaction.
+
+Consider, for example, the previous example where the +PictureFile+ model needs to delete a file after a record is destroyed. If anything raises an exception after the +after_destroy+ callback is called and the transaction rolls back, the file will have been deleted and the model will be left in an inconsistent state. For example, suppose that +picture_file_2+ in the code below is not valid and the +save!+ method raises an error.
+
+<ruby>
+PictureFile.transaction do
+  picture_file_1.destroy
+  picture_file_2.save!
+end
+</ruby>
+
+By using the +after_commit+ callback we can account for this case.
+
+<ruby>
+class PictureFile < ActiveRecord::Base
+  attr_accessor :delete_file
+
+  after_destroy do |picture_file|
+    picture_file.delete_file = picture_file.filepath
+  end
+
+  after_commit do |picture_file|
+    if picture_file.delete_file && File.exist?(picture_file.delete_file)
+      File.delete(picture_file.delete_file)
+      picture_file.delete_file = nil
+    end
+  end
+end
+</ruby>
+
+The +after_commit+ and +after_rollback+ callbacks are guaranteed to be called for all models created, updated, or destroyed within a transaction block. If any exceptions are raised within one of these callbacks, they will be ignored so that they don't interfere with the other callbacks. As such, if your callback code could raise an exception, you'll need to rescue it and handle it appropriately within the callback.
+
+h3. Changelog
+
+* 17 Février, 2011: Add description of transaction callbacks.
+* July 20, 2010: Fixed typos and rephrased some paragraphs for clarity. "Jaime Iniesta":http://jaimeiniesta.com
+* May 24, 2010: Fixed document to validate XHTML 1.0 Strict. "Jaime Iniesta":http://jaimeiniesta.com
+* May 15, 2010: Validation Errors section updated by "Emili Parreño":http://www.eparreno.com
+* March 7, 2009: Callbacks revision by Trevor Turk
+* February 10, 2009: Observers revision by Trevor Turk
+* February 5, 2009: Initial revision by Trevor Turk
+* January 9, 2009: Initial version by "Cássio Marques":credits.html#cmarques
