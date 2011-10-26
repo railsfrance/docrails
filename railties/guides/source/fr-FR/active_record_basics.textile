@@ -1,0 +1,218 @@
+h2. Les bases d'Active Record
+
+Ce guide est une introduction à Active Record. Après avoir lu ce guide nous espérons que vous ayez appris :
+
+* Ce que sont les ORM (Object Relational Mapping) et Active Record et comment ils sont utilisés dans Rails
+* Comment Active Record se place dans le paradigme Modèle-Vue-Contrôleur
+* Comment utiliser les modèles Active Record et manipuler des données stockées dans une base de données relationnelle
+* Les conventions de dénomination des schémas Active Record
+* Les concepts de migrations de base de données, les validations, et les callbacks
+
+endprologue.
+
+h3. Qu'est ce qu'Active Record?
+
+Active Record est le M dans "MVC":getting_started.html#the-mvc-architecture - le modèle - qui est la couche du système en charge de représenter les données et la logique métier. Active Record facilite la création et l'usage des objets métier dont les données requièrent un stockage persistant via une base de données. C'est une implémentation du modèle de conception Active Record qui est lui-même une description d'un système d'ORM.
+
+
+h4. Le modèle de conception Active Record
+
+Active Record est décrit par Martin Fowler dans son livre _Patterns of Enterprise Application Architecture_. Dans Active record, les objets apportent à la fois la persistance des données et le comportement qui s'opère sur ces données. Active Record prend le parti qu'être sûr que la logique d'accès aux données fait partie de l'objet éduquera l'utilisateur de cet objet sur la façon de lire et d'écrire dans la base de données.
+
+h4. Object Relational Mapping (Mapping objet-relationnel)
+
+Le Mapping objet-relationnel, plus souvent appelé par son abréviation anglophone (ORM), est un technique qui établit des correspondances entre les objets d'une application et les tables d'un système de gestion de base de données relationnelle. En utilisant un ORM, les propriétés et les relations des objets dans l'application peuvent facilement être enregistrées et récupérées depuis la base de données sans écrire de commandes SQL directement et avec dans l'ensemble moins de code consacré à l'accès à la base de données.
+
+h4. Active Record en tant que structure d'ORM
+
+Active Record regroupe plusieurs mécanismes, les plus importants étant les possibilité de :
+
+* Représenter des modèles et leurs données
+* Représenter les associations entre ces modèles
+* Représenter une hiérarchie d'héritage au travers des modèles relationnels
+* Valider les modèles avant qu'ils ne soient enregistrés dans la base de données
+* Exécuter des commandes de base de données dans un style plus orienté objet
+
+h3. Convention plutôt que configuration dans Active Record
+
+Quand on écrit une application en utilisant d'autres langages de programmation ou d'autres frameworks, il est nécessaire d'écrire beaucoup de code destiné seulement à la configuration. C'est particulièrement vrai pour les frameworks d'ORM en général. Cependant, si vous suivez les conventions adoptées par Rails, créer un modèle Active Record ne nécessitera que très peu de configuration (et dans certains cas, pas de configuration du tout). L'idée c'est que si vous configurez votre application de la même façon la plupart du temps, alors ça devrait être la configuration de base. Dans ces cas, une configuration explicite ne serait nécessaire que dans ces cas où vous ne suivez pas les conventions, pour quelque raison que ce soit.
+
+h4. Convention de dénomination
+
+Par défaut, Active Record utilise quelques conventions de dénomination pour deviner comment les correspondances entre les modèles et les tables de la base de données devraient être créées. Rails transformera le nom de votre classe pour trouver le nom de la table de la base de données correspondante. Par exemple, pour une classe +Book+, vous devriez avoir une table appelée *books*. Le mécanisme de pluralisation de Rails est très puissant, puisqu'il est capable de mettre au pluriel (et inversement de mettre au singulier) à la fois les mots réguliers et irrégulier (c'est vrai de base pour la langue anglaise, il est possible de décrire les irrégularités des autres langue grâce aux "inflexions":active_support_core_extensions.html#inflections). Lorsque le nom de la classe est composé de plusieurs mots, le nom de la classe du modèle devrait suivre les convention de Ruby, en utilisant la forme camelCase, alors que les tables devront séparer les mots par des soulignés. Exemples :
+
+* Table de base de données - Pluriel avec soulignés séparant les mots (e.g., book_club)
+* Nom de classe - Singulier avec la première lettre de chaque mot en majuscule (e.g., BookClub)
+
+|_.Modèle / Classe |_.Table / Schéma |
+|Post          |posts|
+|LineItem      |line_items|
+|Deer          |deer|
+|Mouse         |mice|
+|Person        |people|
+
+h4. Convention de schéma
+
+Active Record utilise des conventions de dénomination pour les colonnes des tables de la base de données, en fonction de la raison d'être de ces colonnes.
+
+* *Clés étrangères* - Ces champs devront être nommés suivant le schéma table_id (e.g., item_id, order_id). Ce sont les champs qu'Active Record recherchera quand vous créerez des associations entre vos modèles.
+* *Clés primaires* - Par défaut, Active Record utilisera une colonne de type entier nommé "id" comme clé primaire de la table. En utilisant les "Migrations Rails":migrations.html pour créer vos tables, cette colonne sera automatiquement créée.
+
+Voici aussi quelques autre noms de colonnes optionnelles qui fourniront des fonctionnalités supplémentaires aux instances Active Record :
+
+* *created_at* - sera automatiquement remplie à la date et l'heure courante lorsque l'entrée sera créée.
+* *created_on* - sera automatiquement remplie à la date courante lorsque l'entrée sera créée.
+* *updated_at* - sera automatiquement remplie à la date et l'heure courante à chaque fois que l'entrée sera créée mise à jour.
+* *updated_on* - sera automatiquement remplie à la date courante à chaque fois que l'entrée sera créée mise à jour.
+* *lock_version* - ajoute Adds "l'optimistic locking" : http://api.rubyonrails.com/classes/ActiveRecord/Locking.html à un modèle.
+* *type* - spécifie que ce modèle utilise "l'héritage de type STI" : http://api.rubyonrails.com/classes/ActiveRecord/Base.html (Single Table Inheritance, héritage par partage de table)
+* *(table_name)_count* - utilisé pour mettre en cache le nombre d'éléments appartenant à une association. Par exemple, une colonne +comments_count+ dans une Classe +Post+ qui a plusieurs instances de +Comment+ mettra en cache le nombre existant de commentaires pour chaque post.
+
+NOTE : Bien que ces colonnes soient optionnelles, leur nom est en fait réservé par Active Record. Restez à l'écart des mots réservés à moins que vous ne vouliez la fonctionnalité correspondante. Par exemple, "type" est un mot réservé utilisé pour désigner une classe utilisant l'héritage de type STI. Si vous n'utilisez pas l'héritage de type STI, choisissez plutôt un mot similaire, comme "context", qui convient aussi précisément pour décrire la donnée que vous voulez modéliser.
+
+h3. Création d'un modèle Active Record
+
+Il est très simple de créer un modèle Active Record. Tout ce que vous avez à faire est de faire une classe héritant de +ActiveRecord::Base+.
+
+<ruby>
+class Product < ActiveRecord::Base; end
+</ruby>
+
+Cela va créer un modèle +Product+, correspondant à une table *products* dans la base de données. En faisant cela, vous avez aussi la possibilité de faire correspondre les colonnes de chaque ligne dans cette table avec les attributs des instances de votre modèle. Donc supposons que votre table *products* soit créée en utilisant la commande SQL suivante :
+
+<sql>
+CREATE TABLE products (
+   id int(11) NOT NULL auto_increment,
+   name varchar(255),
+   PRIMARY KEY  (id)
+);
+</sql>
+
+En suivant le schéma de la table ci-dessus, vous pourrez écrire le code suivant : 
+
+<ruby>
+p = Product.new
+p.name = "Some Book"
+puts p.name # "Some Book"
+</ruby>
+
+h3. Redéfinir les conventions de dénomination
+
+Que faire si vous avez besoin de suivre une convention de dénomination différente, ou que vous avez besoin d'utiliser votre application Rails avec une base de données déjà existante ? Pas de problème, vous pouvez facilement redéfinir les conventions de base.
+
+Vous pouvez utiliser la méthode +ActiveRecord::Base.set_table_name+  pour spécifier le nom de la table qui devra être utilisée :
+
+<ruby>
+class Product < ActiveRecord::Base
+  set_table_name "PRODUCT"
+end
+</ruby>
+
+Si vous faites cela, vous devrez définir manuellement le nom de la classe qui hébergera les données de test (class_name.yml) en utilisant la méthode +set_fixture_class+ dans vos définitions de test : 
+
+<ruby>
+class FunnyJoke < ActiveSupport::TestCase
+  set_fixture_class :funny_jokes => 'Joke'
+  fixtures :funny_jokes
+  ...
+end
+</ruby>
+
+Il est aussi possible de redéfinir la colonne qui devra être utilisée comme clé primaire de la table, en se servant de la méthode +ActiveRecord::Base.set_primary_key+ : 
+
+<ruby>
+class Product < ActiveRecord::Base
+  set_primary_key "product_id"
+end
+</ruby>
+
+h3. Lire et écrire des données
+
+CRUD est un acronyme pour les 4 verbes que nous utilisons pour manipuler des données : *C*reate (créer), *R*ead (lire), *U*pdate (mettre à jour) and *D*elete (supprimer). Active Record crée automatiquement les méthodes permettant à une application de lire et manipuler des données stockées dans la table correspondante.
+
+h4. Créer
+
+Les objets Active Record peuvent être créés à partir d'un hash, d'un bloc ou avoir leurs attributs mis à jour manuellement après la création. La méthode _new_ renverra un nouvel objet alors que _create_ renverra l'objet et le sauvegardera dans la base de données.
+
+Par exemple, en prenant un modèle +User+ avec les attributs +name+ et +occupation+, l'appel à la méthode _create_ créera et sauvegardera une nouvelle entrée dans la base de données :
+
+<ruby>
+  user = User.create(:name => "David", :occupation => "Code Artist")
+</ruby>
+
+En utilisant la méthode _new_, un objet peut être créé sans être sauvegardé : 
+
+<ruby>
+  user = User.new
+  user.name = "David"
+  user.occupation = "Code Artist"
+</ruby>
+
+Un appel à _user.save_ aura pour effet de sauvegarder l'entrée dans la base de données.
+
+Enfin, en passant un bloc à _create_ ou _new_ retournera un nouvel objet User :
+
+<ruby>
+  user = User.new do |u|
+    u.name = "David"
+    u.occupation = "Code Artist"
+  end
+</ruby>
+
+h4. Lire
+
+Active Record fournit une riche API pour accéder aux données d'une base. Voici ci-dessous quelques exemples de différentes méthodes d'accès au données fournies par Active Record.
+
+<ruby>
+  # Renvoie tous les utilisateurs
+  users = User.all
+</ruby>
+
+<ruby>
+  # Renvoie le premier utilisateur
+  user = User.first
+</ruby>
+
+<ruby>
+  # Renvoie le premier utilisateur nommé David
+  david = User.find_by_name('David')
+</ruby>
+
+<ruby>
+  # Renvoie tous les utilisateurs nommés David qui sont 'Code Artists', triés par date de création dans un ordre chronologique inverse
+  users = User.all(:conditions => { :name => 'David', :occupation => 'Code Artist'}, :order => 'created_at DESC')
+</ruby>
+
+Vous en apprendrez plus sur les façon de chercher des modèles Active Record dans le guide "Interface d'interrogation d'Active Record":"active_record_querying.html".
+
+h4. Mise à jour
+
+Une fois qu'un objet Active Record a été récupéré, ses attributs peuvent être modifiés et il peut être sauvegardé dans la base de données.
+
+<ruby>
+  user = User.find_by_name('David')
+  user.name = 'Dave'
+  user.save
+</ruby>
+
+h4. Suppression
+
+De la même façon, une fois récupéré, un objet Active Record peut être détruit, ce qui l'effacera de la base de données.
+
+<ruby>
+  user = User.find_by_name('David')
+  user.destroy
+</ruby>
+
+
+h3. Validations
+
+Active Record vous permet de valider l'état d'un modèle avant qu'il ne soit écrit dans la base de données. Il y a plusieurs méthodes que vous pouvez utiliser pour vérifier vos modèles et valider que la valeur d'un attribut n'est pas vide, est unique et n'est pas déjà dans la base de donnée, respecte un format pré-défini... Vous en apprendrez plus sur les validations dans le guide "Validation et callbacks d'Active Record":active_record_validations_callbacks.html#validations-overview.
+
+h3. Callbacks
+
+Les callbacks d'Active Record vous permettent d'attacher du code à certains évènements au long du cycle de vie de vos modèles. Cela vous autorise à ajouter un comportement à vos modèles en exécutant de façon transparente un code quand ces évènements ont lieu, comme par exemple lorqu'un nouvel enregistrement est créé, mis à jour, supprimé, etc. Vous en apprendrez plus sur les callbacks dans le guide "Validation et callbacks d'Active Record":active_record_validations_callbacks.html#validations-overview.
+
+h3. Migrations
+
+Rails met à disposition un langage dédié appelé migrations pour gérer un schéma de base de données. Les migrations sont stockées dans des fichiers qui sont exécutés en utilisant rake sur une base de données qu'Active Record supporte. Rails garde la trace de quels fichiers ont bien été appliqués sur la base de données et fournit des fonctionnalités de retour en arrière. Vous en apprendrez plus sur les migrations dans le guide "Migrations Rails":migrations.html.
