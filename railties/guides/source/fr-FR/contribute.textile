@@ -1,0 +1,70 @@
+h2. Contribuer aux Guides Rails
+
+Les Guides Rails visent à améliorer la documentation de Rails et à la rendre accessible à tous. Un développeur raisonnablement expérimenté devrait être capable d'utiliser les Guides pour monter rapidement en puissance sur Rails. Vous pouvez suivre l'effort global sur le "Lighthouse des Guides Rails":http://rails.lighthouseapp.com/projects/16213-rails-guides/tickets. Nos sponsors ont offert des prix pour ceux qui écrivent un guide entier, mais il y a beaucoup d'autres façon de contribuer. 
+
+endprologue.
+
+h3. Comment Contribuer ?
+
+* Nous avons une politique d'engagement ouverte : tout le monde est bienvenu pour contribuer et corriger des contributions.
+* "docrails est hébergé sur GitHub": http://github.com/lifo/docrails et a un droit d'écriture public.
+* Les Guides sont écrit en Textile, se trouvent dans le répertoire +railties/guides/source+ du projet docrails.
+* Suivez les "Conventions des Guides Rails": http://wiki.github.com/lifo/docrails/rails-guides-conventions.
+* Les ressources statiques sont dans le répertoire +railties/guides/assets+.
+* Exemple de format : "Associations Active Record": http://github.com/lifo/docrails/blob/3e56a3832415476fdd1cb963980d0ae390ac1ed3/railties/guides/source/association_basics.textile.
+* Résultat : "Associations Active Record":association_basics.html.
+* Vous pouvez générer les Guides en phase de test en exécutant +rake generate_guides+ dans le répertoire +railties+.
+* Nous vous encourageons à valider votre XHTML pour les guides générés avant d'envoyer vos changements en exécutant +rake validate_guides+ dans le répertoire +railties+.
+* Les derniers guides "peuvent être consultés en ligne": http://edgeguides.rubyonrails.org/. Ce site web est généré périodiquement depuis docrails.
+
+h3. A Quoi Contribuer ?
+
+* Nous avons besoin d'auteurs, d'éditeurs, de correcteurs, et de traducteurs. Ajouter un seul paragraphe de contenu de qualité à un guide est un bon moyen de commencer.
+* Le moyen le plus facile de commencer est d'améliorer un guide existant:
+** améliorer la structure pour la rendre cohérente ;
+** ajouter des informations manquantes ;
+** corriger toute erreur factuelle ;
+** rétablir les typos ou améliorer le style ;
+** mettre à jour avec la dernière version de Edge Rails.
+* Nous sommes également ouverts aux suggestions pour de tout nouveaux guides:
+** contacter lifo ou fxn pour voir votre idée approuvée (voir la section Contact ci-dessous) ;
+** si vous êtes l'auteur principal d'un guide significatif, vous êtes éligible pour les prix.
+
+h3. Quel est le processus?
+
+* Le moyen de contribuer préféré est de commiter directement sur docrails.
+* Un nouveau guide n'est édité par son auteur qu'une fois qu'il est terminé. Dans ce cas, un retour peu être donné dans son ticket Lighthouse.
+* Si vous écrivez un nouveau guide envoyez librement votre travail sur docrails et avertissez lifo ou fxn quand vous avez terminé un premier brouillon.
+* Les correcteurs des Guides fourniront ensuite un retour, certains possiblement sous la forme de commit direct afin d'agiliser le processus.
+* Finalement le guide sera approuvé et ajouté à l'index.
+
+h3. Prix
+
+Pour chaque guide complété, le contributeur principal recevra tous les prix suivants:
+
+* 200 $ du Caboose Rails Documentation Project.
+* 1 an du plan Micro GitHub à 84 $.
+* 1 an de RPM Basic (Production performance management) pour plus de 10 serveur valant 12 mois à $40 par serveur pour 10 serveurs, soit 4800 $. Et également, une économie de 45 $ par serveur par mois sur une liste de prix pour monter vers des produits avancés.
+
+h3. Règles
+
+* Les Guides sont sous licence Creative Commons Attribution-Share Alike 3.0.
+* Si vous n'êtes pas sûr de quel guide est actuellement en cours de travail, commencez par IRC et demandez.
+* Si le même auteur veut écrire plusieurs guides, c'est idéalement la situation dans laquelle nous aimerions être ! Cependant, cet auteur ne recevrait que le prix en argent comptant pour chacun des guides (et pas le GitHub ou les prix RPM).
+* Notre équipe de correction aura le dernier mot sur le fait qu'un guide est complet et suffisamment de bonne qualité.
+
+Tous les auteurs devraient lire et suivre les "Conventions des Guides Rails": http://wiki.github.com/lifo/docrails/rails-guides-conventions et les "Conventions de la Documentation d'API Rails": http://wiki.github.com/lifo/docrails/rails-api-documentation-conventions.
+
+h3. Traductions
+
+L'effort de traduction pour les Guides Rails vient de commencer. Nous sommes au courant de projets de traduction des Guides en Espagnol, Portugais, Polonais, et Français. Pour plus de détails ou pour participer voyez la page des "Guides de Traduction Rails":http://wiki.github.com/lifo/docrails/translating-rails-guides.
+
+h3. Mailing List
+
+"Ruby on Rails: Documentation":http://groups.google.com/group/rubyonrails-docs est la mailing list pour toute discussion relative aux guides/documentation.
+
+h3. Contact
+
+* IRC : #docrails dans irc.freenode.net
+* Twitter: "@docrails":http://twitter.com/docrails, "@lifo":http://twitter.com/lifo, "@fxn":http://twitter.com/fxn
+* Email : pratiknaik aT gmail, fxn aT hashref dot com
