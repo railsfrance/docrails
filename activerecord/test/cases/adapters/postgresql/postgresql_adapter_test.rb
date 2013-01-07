@@ -14,6 +14,10 @@ module ActiveRecord
         assert_equal 'id', @connection.primary_key('ex')
       end
 
+      def test_primary_key_works_tables_containing_capital_letters
+        assert_equal 'id', @connection.primary_key('CamelCase')
+      end
+
       def test_non_standard_primary_key
         @connection.exec_query('drop table if exists ex')
         @connection.exec_query('create table ex(data character varying(255) primary key)')
@@ -47,6 +51,33 @@ module ActiveRecord
         id = @connection.insert_sql("insert into ex(number) values(5150)")
         expect = @connection.query('select max(id) from ex').first.first
         assert_equal expect, id
+      end
+
+      def test_insert_sql_with_returning_disabled
+        connection = connection_without_insert_returning
+        id = connection.insert_sql("insert into postgresql_partitioned_table_parent (number) VALUES (1)")
+        expect = connection.query('select max(id) from postgresql_partitioned_table_parent').first.first
+        assert_equal expect, id
+      end
+
+      def test_exec_insert_with_returning_disabled
+        connection = connection_without_insert_returning
+        result = connection.exec_insert("insert into postgresql_partitioned_table_parent (number) VALUES (1)", nil, [], 'id', 'postgresql_partitioned_table_parent_id_seq')
+        expect = connection.query('select max(id) from postgresql_partitioned_table_parent').first.first
+        assert_equal expect, result.rows.first.first
+      end
+
+      def test_exec_insert_with_returning_disabled_and_no_sequence_name_given
+        connection = connection_without_insert_returning
+        result = connection.exec_insert("insert into postgresql_partitioned_table_parent (number) VALUES (1)", nil, [], 'id')
+        expect = connection.query('select max(id) from postgresql_partitioned_table_parent').first.first
+        assert_equal expect, result.rows.first.first
+      end
+
+      def test_sql_for_insert_with_returning_disabled
+        connection = connection_without_insert_returning
+        result = connection.sql_for_insert('sql', nil, nil, nil, 'binds')
+        assert_equal ['sql', 'binds'], result
       end
 
       def test_serial_sequence
@@ -179,6 +210,46 @@ module ActiveRecord
         assert_equal Arel.sql('$2'), bind
       end
 
+      def test_partial_index
+        @connection.add_index 'ex', %w{ id number }, :name => 'partial', :where => "number > 100"
+        index = @connection.indexes('ex').find { |idx| idx.name == 'partial' }
+        assert_equal "(number > 100)", index.where
+      end
+
+      def test_distinct_zero_orders
+        assert_equal "DISTINCT posts.id",
+          @connection.distinct("posts.id", [])
+      end
+
+      def test_distinct_one_order
+        assert_equal "DISTINCT posts.id, posts.created_at AS alias_0",
+          @connection.distinct("posts.id", ["posts.created_at desc"])
+      end
+
+      def test_distinct_few_orders
+        assert_equal "DISTINCT posts.id, posts.created_at AS alias_0, posts.position AS alias_1",
+          @connection.distinct("posts.id", ["posts.created_at desc", "posts.position asc"])
+      end
+
+      def test_distinct_blank_not_nil_orders
+        assert_equal "DISTINCT posts.id, posts.created_at AS alias_0",
+          @connection.distinct("posts.id", ["posts.created_at desc", "", "   "])
+      end
+
+      def test_distinct_with_arel_order
+        order = Object.new
+        def order.to_sql
+          "posts.created_at desc"
+        end
+        assert_equal "DISTINCT posts.id, posts.created_at AS alias_0",
+          @connection.distinct("posts.id", [order])
+      end
+
+      def test_distinct_with_nulls
+        assert_equal "DISTINCT posts.title, posts.updater_id AS alias_0", @connection.distinct("posts.title", ["posts.updater_id desc nulls first"])
+        assert_equal "DISTINCT posts.title, posts.updater_id AS alias_0", @connection.distinct("posts.title", ["posts.updater_id desc nulls last"])
+      end
+
       private
       def insert(ctx, data)
         binds   = data.map { |name, value|
@@ -192,6 +263,10 @@ module ActiveRecord
                VALUES (#{bind_subs.join(', ')})"
 
         ctx.exec_insert(sql, 'SQL', binds)
+      end
+
+      def connection_without_insert_returning
+        ActiveRecord::Base.postgresql_connection(ActiveRecord::Base.configurations['arunit'].merge(:insert_returning => false))
       end
     end
   end

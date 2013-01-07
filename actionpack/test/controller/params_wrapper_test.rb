@@ -4,7 +4,7 @@ module Admin; class User; end; end
 
 module ParamsWrapperTestHelp
   def with_default_wrapper_options(&block)
-    @controller.class._wrapper_options = {:format => [:json]}
+    @controller.class._set_wrapper_options({:format => [:json]})
     @controller.class.inherited(@controller.class)
     yield
   end
@@ -35,6 +35,14 @@ class ParamsWrapperTest < ActionController::TestCase
 
   def teardown
     UsersController.last_parameters = nil
+  end
+
+  def test_filtered_parameters
+    with_default_wrapper_options do
+      @request.env['CONTENT_TYPE'] = 'application/json'
+      post :parse, { 'username' => 'sikachu' }
+      assert_equal @request.filtered_parameters, { 'controller' => 'params_wrapper_test/users', 'action' => 'parse', 'username' => 'sikachu', 'user' => { 'username' => 'sikachu' } }
+    end
   end
 
   def test_derived_name_from_controller
@@ -282,6 +290,41 @@ class AnonymousControllerParamsWrapperTest < ActionController::TestCase
       @request.env['CONTENT_TYPE'] = 'application/json'
       post :parse, { 'username' => 'sikachu' }
       assert_parameters({ 'username' => 'sikachu', 'guest' => { 'username' => 'sikachu' }})
+    end
+  end
+end
+
+class IrregularInflectionParamsWrapperTest < ActionController::TestCase
+  include ParamsWrapperTestHelp
+
+  class ParamswrappernewsItem
+    def self.attribute_names
+      ['test_attr']
+    end
+  end
+
+  class ParamswrappernewsController < ActionController::Base
+    class << self
+      attr_accessor :last_parameters
+    end
+
+    def parse
+      self.class.last_parameters = request.params.except(:controller, :action)
+      head :ok
+    end
+  end
+
+  tests ParamswrappernewsController
+
+  def test_uses_model_attribute_names_with_irregular_inflection
+    ActiveSupport::Inflector.inflections do |inflect|
+      inflect.irregular 'paramswrappernews_item', 'paramswrappernews'
+    end
+
+    with_default_wrapper_options do
+      @request.env['CONTENT_TYPE'] = 'application/json'
+      post :parse, { 'username' => 'sikachu', 'test_attr' => 'test_value' }
+      assert_parameters({ 'username' => 'sikachu', 'test_attr' => 'test_value', 'paramswrappernews_item' => { 'test_attr' => 'test_value' }})
     end
   end
 end

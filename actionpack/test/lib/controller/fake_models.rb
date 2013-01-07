@@ -34,6 +34,16 @@ end
 class GoodCustomer < Customer
 end
 
+class ValidatedCustomer < Customer
+  def errors
+    if name =~ /Sikachu/i
+      []
+    else
+      [{:name => "is invalid"}]
+    end
+  end
+end
+
 module Quiz
   class Question < Struct.new(:name, :id)
     extend ActiveModel::Naming
@@ -175,8 +185,8 @@ class HashBackedAuthor < Hash
 end
 
 module Blog
-  def self._railtie
-    self
+  def self.use_relative_model_naming?
+    true
   end
 
   class Post < Struct.new(:title, :id)
@@ -203,4 +213,7 @@ class RenderJsonTestException < Exception
   def to_json(options = nil)
     return { :error => self.class.name, :message => self.to_s }.to_json
   end
+end
+
+class Car < Struct.new(:color)
 end

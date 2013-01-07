@@ -3,6 +3,13 @@ require "rails/generators/rails/app/app_generator"
 require 'date'
 
 module Rails
+  # The plugin builder allows you to override elements of the plugin
+  # generator without being forced to reverse the operations of the default
+  # generator.
+  #
+  # This allows you to override entire operations, like the creation of the
+  # Gemfile, README, or JavaScript files, without needing to know exactly
+  # what those operations do so you can create another template action.
   class PluginBuilder
     def rakefile
       template "Rakefile"
@@ -10,15 +17,15 @@ module Rails
 
     def app
       if mountable?
-        directory "app"
-        empty_directory_with_gitkeep "app/assets/images/#{name}"
+        directory 'app'
+        empty_directory_with_keep_file "app/assets/images/#{name}"
       elsif full?
-        empty_directory_with_gitkeep "app/models"
-        empty_directory_with_gitkeep "app/controllers"
-        empty_directory_with_gitkeep "app/views"
-        empty_directory_with_gitkeep "app/helpers"
-        empty_directory_with_gitkeep "app/mailers"
-        empty_directory_with_gitkeep "app/assets/images/#{name}"
+        empty_directory_with_keep_file 'app/models'
+        empty_directory_with_keep_file 'app/controllers'
+        empty_directory_with_keep_file 'app/views'
+        empty_directory_with_keep_file 'app/helpers'
+        empty_directory_with_keep_file 'app/mailers'
+        empty_directory_with_keep_file "app/assets/images/#{name}"
       end
     end
 
@@ -39,7 +46,7 @@ module Rails
     end
 
     def gitignore
-      copy_file "gitignore", ".gitignore"
+      template "gitignore", ".gitignore"
     end
 
     def lib
@@ -61,7 +68,7 @@ module Rails
       append_file "Rakefile", <<-EOF
 #{rakefile_test_tasks}
 
-task :default => :test
+task default: :test
       EOF
       if full?
         template "test/integration/navigation_test.rb"
@@ -82,10 +89,10 @@ task :default => :test
     end
 
     def test_dummy_config
-      template "rails/boot.rb", "#{dummy_path}/config/boot.rb", :force => true
-      template "rails/application.rb", "#{dummy_path}/config/application.rb", :force => true
+      template "rails/boot.rb", "#{dummy_path}/config/boot.rb", force: true
+      template "rails/application.rb", "#{dummy_path}/config/application.rb", force: true
       if mountable?
-        template "rails/routes.rb", "#{dummy_path}/config/routes.rb", :force => true
+        template "rails/routes.rb", "#{dummy_path}/config/routes.rb", force: true
       end
     end
 
@@ -110,7 +117,7 @@ task :default => :test
         copy_file "#{app_templates_dir}/app/assets/stylesheets/application.css",
                   "app/assets/stylesheets/#{name}/application.css"
       elsif full?
-        empty_directory_with_gitkeep "app/assets/stylesheets/#{name}"
+        empty_directory_with_keep_file "app/assets/stylesheets/#{name}"
       end
     end
 
@@ -121,37 +128,51 @@ task :default => :test
         template "#{app_templates_dir}/app/assets/javascripts/application.js.tt",
                   "app/assets/javascripts/#{name}/application.js"
       elsif full?
-        empty_directory_with_gitkeep "app/assets/javascripts/#{name}"
+        empty_directory_with_keep_file "app/assets/javascripts/#{name}"
       end
     end
 
     def script(force = false)
       return unless full?
 
-      directory "script", :force => force do |content|
+      directory "script", force: force do |content|
         "#{shebang}\n" + content
       end
-      chmod "script", 0755, :verbose => false
+      chmod "script", 0755, verbose: false
+    end
+
+    def gemfile_entry
+      return unless inside_application?
+
+      gemfile_in_app_path = File.join(rails_app_path, "Gemfile")
+      if File.exist? gemfile_in_app_path
+        entry = "gem '#{name}', path: '#{relative_path}'"
+        append_file gemfile_in_app_path, entry
+      end
     end
   end
 
   module Generators
-    class PluginNewGenerator < AppBase
+    class PluginNewGenerator < AppBase # :nodoc:
       add_shared_options_for "plugin"
 
       alias_method :plugin_path, :app_path
 
-      class_option :dummy_path,   :type => :string, :default => "test/dummy",
-                                  :desc => "Create dummy application at given path"
+      class_option :dummy_path,   type: :string, default: "test/dummy",
+                                  desc: "Create dummy application at given path"
 
-      class_option :full,         :type => :boolean, :default => false,
-                                  :desc => "Generate rails engine with integration tests"
+      class_option :full,         type: :boolean, default: false,
+                                  desc: "Generate a rails engine with bundled Rails application for testing"
 
-      class_option :mountable,    :type => :boolean, :default => false,
-                                  :desc => "Generate mountable isolated application"
+      class_option :mountable,    type: :boolean, default: false,
+                                  desc: "Generate mountable isolated application"
 
-      class_option :skip_gemspec, :type => :boolean, :default => false,
-                                  :desc => "Skip gemspec file"
+      class_option :skip_gemspec, type: :boolean, default: false,
+                                  desc: "Skip gemspec file"
+
+      class_option :skip_gemfile_entry, type: :boolean, default: false,
+                                        desc: "If creating plugin in application's directory " +
+                                                 "skip adding entry to Gemfile"
 
       def initialize(*args)
         raise Error, "Options should be given after the plugin name. For details run: rails plugin --help" if args[0].blank?
@@ -204,8 +225,12 @@ task :default => :test
       end
 
       def create_test_dummy_files
-        return if options[:skip_test_unit] && options[:dummy_path] == 'test/dummy'
+        return unless with_dummy_app?
         create_dummy_app
+      end
+
+      def update_gemfile
+        build(:gemfile_entry) unless options[:skip_gemfile_entry]
       end
 
       def finish_template
@@ -213,6 +238,18 @@ task :default => :test
       end
 
       public_task :apply_rails_template, :run_bundle
+
+      def name
+        @name ||= begin
+          # same as ActiveSupport::Inflector#underscore except not replacing '-'
+          underscored = original_name.dup
+          underscored.gsub!(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
+          underscored.gsub!(/([a-z\d])([A-Z])/,'\1_\2')
+          underscored.downcase!
+
+          underscored
+        end
+      end
 
     protected
 
@@ -242,12 +279,16 @@ task :default => :test
         options[:mountable]
       end
 
+      def with_dummy_app?
+        options[:skip_test_unit].blank? || options[:dummy_path] != 'test/dummy'
+      end
+
       def self.banner
         "rails plugin new #{self.arguments.map(&:usage).join(' ')} [options]"
       end
 
-      def name
-        @name ||= File.basename(destination_root)
+      def original_name
+        @original_name ||= File.basename(destination_root)
       end
 
       def camelized
@@ -255,12 +296,14 @@ task :default => :test
       end
 
       def valid_const?
-        if camelized =~ /^\d/
-          raise Error, "Invalid plugin name #{name}. Please give a name which does not start with numbers."
+        if original_name =~ /[^0-9a-zA-Z_]+/
+          raise Error, "Invalid plugin name #{original_name}. Please give a name which use only alphabetic or numeric or \"_\" characters."
+        elsif camelized =~ /^\d/
+          raise Error, "Invalid plugin name #{original_name}. Please give a name which does not start with numbers."
         elsif RESERVED_NAMES.include?(name)
-          raise Error, "Invalid plugin name #{name}. Please give a name which does not match one of the reserved rails words."
+          raise Error, "Invalid plugin name #{original_name}. Please give a name which does not match one of the reserved rails words."
         elsif Object.const_defined?(camelized)
-          raise Error, "Invalid plugin name #{name}, constant #{camelized} is already in use. Please choose another plugin name."
+          raise Error, "Invalid plugin name #{original_name}, constant #{camelized} is already in use. Please choose another plugin name."
         end
       end
 
@@ -270,7 +313,7 @@ task :default => :test
           dummy_application_path = File.expand_path("#{dummy_path}/config/application.rb", destination_root)
           unless options[:pretend] || !File.exists?(dummy_application_path)
             contents = File.read(dummy_application_path)
-            contents[(contents.index("module Dummy"))..-1]
+            contents[(contents.index(/module ([\w]+)\n(.*)class Application/m))..-1]
           end
         end
       end
@@ -300,6 +343,19 @@ end
 
       def mute(&block)
         shell.mute(&block)
+      end
+
+      def rails_app_path
+        APP_PATH.sub("/config/application", "") if defined?(APP_PATH)
+      end
+
+      def inside_application?
+        rails_app_path && app_path =~ /^#{rails_app_path}/
+      end
+
+      def relative_path
+        return unless inside_application?
+        app_path.sub(/^#{rails_app_path}\//, '')
       end
     end
   end

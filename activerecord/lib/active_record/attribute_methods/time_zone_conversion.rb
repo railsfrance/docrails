@@ -1,66 +1,71 @@
-require 'active_support/core_ext/class/attribute'
-require 'active_support/core_ext/object/inclusion'
-
 module ActiveRecord
   module AttributeMethods
     module TimeZoneConversion
+      class Type # :nodoc:
+        def initialize(column)
+          @column = column
+        end
+
+        def type_cast(value)
+          value = @column.type_cast(value)
+          value.acts_like?(:time) ? value.in_time_zone : value
+        end
+
+        def type
+          @column.type
+        end
+      end
+
       extend ActiveSupport::Concern
 
       included do
-        cattr_accessor :time_zone_aware_attributes, :instance_writer => false
+        mattr_accessor :time_zone_aware_attributes, instance_writer: false
         self.time_zone_aware_attributes = false
 
-        class_attribute :skip_time_zone_conversion_for_attributes, :instance_writer => false
+        class_attribute :skip_time_zone_conversion_for_attributes, instance_writer: false
         self.skip_time_zone_conversion_for_attributes = []
       end
 
       module ClassMethods
         protected
-          # Defined for all +datetime+ and +timestamp+ attributes when +time_zone_aware_attributes+ are enabled.
-          # This enhanced read method automatically converts the UTC time stored in the database to the time
-          # zone stored in Time.zone.
-          def define_method_attribute(attr_name)
-            if create_time_zone_conversion_attribute?(attr_name, columns_hash[attr_name])
-              method_body, line = <<-EOV, __LINE__ + 1
-                def _#{attr_name}
-                  cached = @attributes_cache['#{attr_name}']
-                  return cached if cached
-                  time = _read_attribute('#{attr_name}')
-                  @attributes_cache['#{attr_name}'] = time.acts_like?(:time) ? time.in_time_zone : time
+        # Defined for all +datetime+ and +timestamp+ attributes when +time_zone_aware_attributes+ are enabled.
+        # This enhanced write method will automatically convert the time passed to it to the zone stored in Time.zone.
+        def define_method_attribute=(attr_name)
+          if create_time_zone_conversion_attribute?(attr_name, columns_hash[attr_name])
+            method_body, line = <<-EOV, __LINE__ + 1
+              def #{attr_name}=(original_time)
+                original_time = nil if original_time.blank?
+                time = original_time
+                unless time.acts_like?(:time)
+                  time = time.is_a?(String) ? Time.zone.parse(time) : time.to_time rescue time
                 end
-                alias #{attr_name} _#{attr_name}
-              EOV
-              generated_attribute_methods.module_eval(method_body, __FILE__, line)
-            else
-              super
-            end
-          end
-
-          # Defined for all +datetime+ and +timestamp+ attributes when +time_zone_aware_attributes+ are enabled.
-          # This enhanced write method will automatically convert the time passed to it to the zone stored in Time.zone.
-          def define_method_attribute=(attr_name)
-            if create_time_zone_conversion_attribute?(attr_name, columns_hash[attr_name])
-              method_body, line = <<-EOV, __LINE__ + 1
-                def #{attr_name}=(original_time)
-                  time = original_time
-                  unless time.acts_like?(:time)
-                    time = time.is_a?(String) ? Time.zone.parse(time) : time.to_time rescue time
-                  end
-                  time = time.in_time_zone rescue nil if time
-                  write_attribute(:#{attr_name}, original_time)
-                  @attributes_cache["#{attr_name}"] = time
+                zoned_time   = time && time.in_time_zone rescue nil
+                rounded_time = round_usec(zoned_time)
+                rounded_value = round_usec(read_attribute("#{attr_name}"))
+                if (rounded_value != rounded_time) || (!rounded_value && original_time)
+                  write_attribute("#{attr_name}", original_time)
+                  #{attr_name}_will_change!
+                  @attributes_cache["#{attr_name}"] = zoned_time
                 end
-              EOV
-              generated_attribute_methods.module_eval(method_body, __FILE__, line)
-            else
-              super
-            end
+              end
+            EOV
+            generated_attribute_methods.module_eval(method_body, __FILE__, line)
+          else
+            super
           end
+        end
 
         private
-          def create_time_zone_conversion_attribute?(name, column)
-            time_zone_aware_attributes && !self.skip_time_zone_conversion_for_attributes.include?(name.to_sym) && column.type.in?([:datetime, :timestamp])
-          end
+        def create_time_zone_conversion_attribute?(name, column)
+          time_zone_aware_attributes &&
+            !self.skip_time_zone_conversion_for_attributes.include?(name.to_sym) &&
+            [:datetime, :timestamp].include?(column.type)
+        end
+      end
+
+      private
+      def round_usec(value)
+        value.change(usec: 0) if value
       end
     end
   end

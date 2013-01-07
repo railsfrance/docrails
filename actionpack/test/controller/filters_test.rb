@@ -16,7 +16,7 @@ class ActionController::Base
 
   def assigns(key = nil)
     assigns = {}
-    instance_variable_names.each do |ivar|
+    instance_variables.each do |ivar|
       next if ActionController::Base.protected_instance_variables.include?(ivar)
       assigns[ivar[1..-1]] = instance_variable_get(ivar)
     end
@@ -165,8 +165,6 @@ class FilterTest < ActionController::TestCase
         @ran_filter ||= []
         @ran_filter << "clean_up_tmp"
       end
-
-      def rescue_action(e) raise(e) end
   end
 
   class ConditionalCollectionFilterController < ConditionalFilterController
@@ -195,7 +193,7 @@ class FilterTest < ActionController::TestCase
   end
 
   class ConditionalClassFilter
-    def self.filter(controller) controller.instance_variable_set(:"@ran_class_filter", true) end
+    def self.before(controller) controller.instance_variable_set(:"@ran_class_filter", true) end
   end
 
   class OnlyConditionClassController < ConditionalFilterController
@@ -311,7 +309,7 @@ class FilterTest < ActionController::TestCase
   end
 
   class AuditFilter
-    def self.filter(controller)
+    def self.before(controller)
       controller.instance_variable_set(:"@was_audited", true)
     end
   end
@@ -328,6 +326,12 @@ class FilterTest < ActionController::TestCase
       controller.instance_variable_set(:"@after_ran", true)
       controller.class.execution_log << " after aroundfilter " if controller.respond_to? :execution_log
     end
+
+    def around(controller)
+      before(controller)
+      yield
+      after(controller)
+    end
   end
 
   class AppendedAroundFilter
@@ -337,6 +341,12 @@ class FilterTest < ActionController::TestCase
 
     def after(controller)
       controller.class.execution_log << " after appended aroundfilter "
+    end
+
+    def around(controller)
+      before(controller)
+      yield
+      after(controller)
     end
   end
 
@@ -439,7 +449,7 @@ class FilterTest < ActionController::TestCase
   class ErrorToRescue < Exception; end
 
   class RescuingAroundFilterWithBlock
-    def filter(controller)
+    def around(controller)
       begin
         yield
       rescue ErrorToRescue => ex
@@ -454,11 +464,6 @@ class FilterTest < ActionController::TestCase
     def show
       raise ErrorToRescue.new("Something made the bad noise.")
     end
-
-  private
-    def rescue_action(exception)
-      raise exception
-    end
   end
 
   class NonYieldingAroundFilterController < ActionController::Base
@@ -471,9 +476,6 @@ class FilterTest < ActionController::TestCase
     def index
       render :inline => "index"
     end
-
-    #make sure the controller complains
-    def rescue_action(e); raise e; end
 
     private
 
@@ -497,14 +499,6 @@ class FilterTest < ActionController::TestCase
 
   end
 
-  class ::AppSweeper < ActionController::Caching::Sweeper; end
-  class SweeperTestController < ActionController::Base
-    cache_sweeper :app_sweeper
-    def show
-      render :text => 'hello world'
-    end
-  end
-
   class ImplicitActionsController < ActionController::Base
     before_filter :find_only, :only => :edit
     before_filter :find_except, :except => :edit
@@ -518,21 +512,6 @@ class FilterTest < ActionController::TestCase
     def find_except
       @except = 'Except'
     end
-  end
-
-  def test_sweeper_should_not_block_rendering
-    response = test_process(SweeperTestController)
-    assert_equal 'hello world', response.body
-  end
-
-  def test_before_method_of_sweeper_should_always_return_true
-    sweeper = ActionController::Caching::Sweeper.send(:new)
-    assert sweeper.before(TestController.new)
-  end
-
-  def test_after_method_of_sweeper_should_always_return_nil
-    sweeper = ActionController::Caching::Sweeper.send(:new)
-    assert_nil sweeper.after(TestController.new)
   end
 
   def test_non_yielding_around_filters_not_returning_false_do_not_raise
@@ -825,11 +804,7 @@ class FilterTest < ActionController::TestCase
     end
 end
 
-
-
 class PostsController < ActionController::Base
-  def rescue_action(e); raise e; end
-
   module AroundExceptions
     class Error < StandardError ; end
     class Before < Error ; end
@@ -878,7 +853,7 @@ end
 
 class ControllerWithFilterClass < PostsController
   class YieldingFilter < DefaultFilter
-    def self.filter(controller)
+    def self.around(controller)
       yield
       raise After
     end
@@ -889,7 +864,7 @@ end
 
 class ControllerWithFilterInstance < PostsController
   class YieldingFilter < DefaultFilter
-    def filter(controller)
+    def around(controller)
       yield
       raise After
     end
@@ -900,13 +875,13 @@ end
 
 class ControllerWithFilterMethod < PostsController
   class YieldingFilter < DefaultFilter
-    def filter(controller)
+    def around(controller)
       yield
       raise After
     end
   end
 
-  around_filter YieldingFilter.new.method(:filter), :only => :raises_after
+  around_filter YieldingFilter.new.method(:around), :only => :raises_after
 end
 
 class ControllerWithProcFilter < PostsController
@@ -951,9 +926,7 @@ class ControllerWithAllTypesOfFilters < PostsController
 end
 
 class ControllerWithTwoLessFilters < ControllerWithAllTypesOfFilters
-  $vbf = true
   skip_filter :around_again
-  $vbf = false
   skip_filter :after
 end
 

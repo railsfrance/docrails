@@ -1,9 +1,8 @@
 # encoding: utf-8
-require 'active_support/core_ext/string/encoding'
 
 class Object
   # An object is blank if it's false, empty, or a whitespace string.
-  # For example, "", "   ", +nil+, [], and {} are all blank.
+  # For example, '', '   ', +nil+, [], and {} are all blank.
   #
   # This simplifies:
   #
@@ -44,7 +43,6 @@ class NilClass
   # +nil+ is blank:
   #
   #   nil.blank? # => true
-  #
   def blank?
     true
   end
@@ -54,7 +52,6 @@ class FalseClass
   # +false+ is blank:
   #
   #   false.blank? # => true
-  #
   def blank?
     true
   end
@@ -64,7 +61,6 @@ class TrueClass
   # +true+ is not blank:
   #
   #   true.blank? # => false
-  #
   def blank?
     false
   end
@@ -75,7 +71,6 @@ class Array
   #
   #   [].blank?      # => true
   #   [1,2,3].blank? # => false
-  #
   alias_method :blank?, :empty?
 end
 
@@ -83,29 +78,19 @@ class Hash
   # A hash is blank if it's empty:
   #
   #   {}.blank?                # => true
-  #   {:key => 'value'}.blank? # => false
-  #
+  #   { key: 'value' }.blank?  # => false
   alias_method :blank?, :empty?
 end
 
 class String
-  # 0x3000: fullwidth whitespace
-  NON_WHITESPACE_REGEXP = %r![^\s#{[0x3000].pack("U")}]!
-
   # A string is blank if it's empty or contains whitespaces only:
   #
-  #   "".blank?                 # => true
-  #   "   ".blank?              # => true
-  #   "　".blank?               # => true
-  #   " something here ".blank? # => false
-  #
+  #   ''.blank?                 # => true
+  #   '   '.blank?              # => true
+  #   '　'.blank?               # => true
+  #   ' something here '.blank? # => false
   def blank?
-    # 1.8 does not takes [:space:] properly
-    if encoding_aware?
-      self !~ /[^[:space:]]/
-    else
-      self !~ NON_WHITESPACE_REGEXP
-    end
+    self !~ /[^[:space:]]/
   end
 end
 
@@ -114,7 +99,6 @@ class Numeric #:nodoc:
   #
   #   1.blank? # => false
   #   0.blank? # => false
-  #
   def blank?
     false
   end

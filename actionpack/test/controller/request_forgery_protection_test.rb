@@ -1,6 +1,5 @@
 require 'abstract_unit'
 require 'digest/sha1'
-require 'active_support/core_ext/string/strip'
 require "active_support/log_subscriber/test_helper"
 
 # common controller actions
@@ -10,7 +9,7 @@ module RequestForgeryProtectionActions
   end
 
   def show_button
-    render :inline => "<%= button_to('New', '/') {} %>"
+    render :inline => "<%= button_to('New', '/') %>"
   end
 
   def external_form
@@ -37,26 +36,38 @@ module RequestForgeryProtectionActions
     render :inline => "<%= form_for(:some_resource, :authenticity_token => false ) {} %>"
   end
 
+  def form_for_remote
+    render :inline => "<%= form_for(:some_resource, :remote => true ) {} %>"
+  end
+
+  def form_for_remote_with_token
+    render :inline => "<%= form_for(:some_resource, :remote => true, :authenticity_token => true ) {} %>"
+  end
+
+  def form_for_with_token
+    render :inline => "<%= form_for(:some_resource, :authenticity_token => true ) {} %>"
+  end
+
+  def form_for_remote_with_external_token
+    render :inline => "<%= form_for(:some_resource, :remote => true, :authenticity_token => 'external_token') {} %>"
+  end
+
   def rescue_action(e) raise e end
 end
 
 # sample controllers
-class RequestForgeryProtectionController < ActionController::Base
+class RequestForgeryProtectionControllerUsingResetSession < ActionController::Base
   include RequestForgeryProtectionActions
-  protect_from_forgery :only => %w(index meta)
+  protect_from_forgery :only => %w(index meta), :with => :reset_session
 end
 
-class RequestForgeryProtectionControllerUsingOldBehaviour < ActionController::Base
+class RequestForgeryProtectionControllerUsingException < ActionController::Base
   include RequestForgeryProtectionActions
-  protect_from_forgery :only => %w(index meta)
-
-  def handle_unverified_request
-    raise(ActionController::InvalidAuthenticityToken)
-  end
+  protect_from_forgery :only => %w(index meta), :with => :exception
 end
 
 
-class FreeCookieController < RequestForgeryProtectionController
+class FreeCookieController < RequestForgeryProtectionControllerUsingResetSession
   self.allow_forgery_protection = false
 
   def index
@@ -64,19 +75,17 @@ class FreeCookieController < RequestForgeryProtectionController
   end
 
   def show_button
-    render :inline => "<%= button_to('New', '/') {} %>"
+    render :inline => "<%= button_to('New', '/') %>"
   end
 end
 
-class CustomAuthenticityParamController < RequestForgeryProtectionController
+class CustomAuthenticityParamController < RequestForgeryProtectionControllerUsingResetSession
   def form_authenticity_param
     'foobar'
   end
 end
 
-
 # common test methods
-
 module RequestForgeryProtectionTests
   def setup
     @token      = "cf50faa3fe97702ca1ae"
@@ -103,6 +112,60 @@ module RequestForgeryProtectionTests
     assert_select 'form>div>input[name=?][value=?]', 'custom_authenticity_token', @token
   end
 
+  def test_should_render_form_without_token_tag_if_remote
+    assert_not_blocked do
+      get :form_for_remote
+    end
+    assert_no_match(/authenticity_token/, response.body)
+  end
+
+  def test_should_render_form_with_token_tag_if_remote_and_embedding_token_is_on
+    original = ActionView::Helpers::FormTagHelper.embed_authenticity_token_in_remote_forms
+    begin
+      ActionView::Helpers::FormTagHelper.embed_authenticity_token_in_remote_forms = true
+      assert_not_blocked do
+        get :form_for_remote
+      end
+      assert_match(/authenticity_token/, response.body)
+    ensure
+      ActionView::Helpers::FormTagHelper.embed_authenticity_token_in_remote_forms = original
+    end
+  end
+
+  def test_should_render_form_with_token_tag_if_remote_and_external_authenticity_token_requested_and_embedding_is_on
+    original = ActionView::Helpers::FormTagHelper.embed_authenticity_token_in_remote_forms
+    begin
+      ActionView::Helpers::FormTagHelper.embed_authenticity_token_in_remote_forms = true
+      assert_not_blocked do
+        get :form_for_remote_with_external_token
+      end
+      assert_select 'form>div>input[name=?][value=?]', 'custom_authenticity_token', 'external_token'
+    ensure
+      ActionView::Helpers::FormTagHelper.embed_authenticity_token_in_remote_forms = original
+    end
+  end
+
+  def test_should_render_form_with_token_tag_if_remote_and_external_authenticity_token_requested
+    assert_not_blocked do
+      get :form_for_remote_with_external_token
+    end
+    assert_select 'form>div>input[name=?][value=?]', 'custom_authenticity_token', 'external_token'
+  end
+
+  def test_should_render_form_with_token_tag_if_remote_and_authenticity_token_requested
+    assert_not_blocked do
+      get :form_for_remote_with_token
+    end
+    assert_select 'form>div>input[name=?][value=?]', 'custom_authenticity_token', @token
+  end
+
+  def test_should_render_form_with_token_tag_with_authenticity_token_requested
+    assert_not_blocked do
+      get :form_for_with_token
+    end
+    assert_select 'form>div>input[name=?][value=?]', 'custom_authenticity_token', @token
+  end
+
   def test_should_allow_get
     assert_not_blocked { get :index }
   end
@@ -117,6 +180,10 @@ module RequestForgeryProtectionTests
 
   def test_should_not_allow_post_without_token_irrespective_of_format
     assert_blocked { post :index, :format=>'xml' }
+  end
+
+  def test_should_not_allow_patch_without_token
+    assert_blocked { patch :index }
   end
 
   def test_should_not_allow_put_without_token
@@ -135,6 +202,10 @@ module RequestForgeryProtectionTests
     assert_not_blocked { post :index, :custom_authenticity_token => @token }
   end
 
+  def test_should_allow_patch_with_token
+    assert_not_blocked { patch :index, :custom_authenticity_token => @token }
+  end
+
   def test_should_allow_put_with_token
     assert_not_blocked { put :index, :custom_authenticity_token => @token }
   end
@@ -151,6 +222,11 @@ module RequestForgeryProtectionTests
   def test_should_allow_delete_with_token_in_header
     @request.env['HTTP_X_CSRF_TOKEN'] = @token
     assert_not_blocked { delete :index }
+  end
+
+  def test_should_allow_patch_with_token_in_header
+    @request.env['HTTP_X_CSRF_TOKEN'] = @token
+    assert_not_blocked { patch :index }
   end
 
   def test_should_allow_put_with_token_in_header
@@ -188,7 +264,7 @@ end
 
 # OK let's get our test on
 
-class RequestForgeryProtectionControllerTest < ActionController::TestCase
+class RequestForgeryProtectionControllerUsingResetSessionTest < ActionController::TestCase
   include RequestForgeryProtectionTests
 
   setup do
@@ -207,7 +283,7 @@ class RequestForgeryProtectionControllerTest < ActionController::TestCase
   end
 end
 
-class RequestForgeryProtectionControllerUsingOldBehaviourTest < ActionController::TestCase
+class RequestForgeryProtectionControllerUsingExceptionTest < ActionController::TestCase
   include RequestForgeryProtectionTests
   def assert_blocked
     assert_raises(ActionController::InvalidAuthenticityToken) do
@@ -237,7 +313,7 @@ class FreeCookieControllerTest < ActionController::TestCase
   end
 
   def test_should_allow_all_methods_without_token
-    [:post, :put, :delete].each do |method|
+    [:post, :patch, :put, :delete].each do |method|
       assert_nothing_raised { send(method, :index)}
     end
   end
@@ -247,10 +323,6 @@ class FreeCookieControllerTest < ActionController::TestCase
     assert_blank @response.body
   end
 end
-
-
-
-
 
 class CustomAuthenticityParamControllerTest < ActionController::TestCase
   def setup

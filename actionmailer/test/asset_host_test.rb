@@ -3,13 +3,13 @@ require 'action_controller'
 
 class AssetHostMailer < ActionMailer::Base
   def email_with_asset
-    mail :to => 'test@localhost',
-      :subject => 'testing email containing asset path while asset_host is set',
-      :from => 'tester@example.com'
+    mail to: 'test@localhost',
+      subject: 'testing email containing asset path while asset_host is set',
+      from: 'tester@example.com'
   end
 end
 
-class AssetHostTest < Test::Unit::TestCase
+class AssetHostTest < ActiveSupport::TestCase
   def setup
     set_delivery_method :test
     ActionMailer::Base.perform_deliveries = true

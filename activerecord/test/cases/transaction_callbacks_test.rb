@@ -6,7 +6,7 @@ class TransactionCallbacksTest < ActiveRecord::TestCase
   fixtures :topics
 
   class TopicWithCallbacks < ActiveRecord::Base
-    set_table_name :topics
+    self.table_name = :topics
 
     after_commit{|record| record.send(:do_after_commit, nil)}
     after_commit(:on => :create){|record| record.send(:do_after_commit, :create)}
@@ -244,49 +244,44 @@ class TransactionCallbacksTest < ActiveRecord::TestCase
     assert_equal :rollback, @first.last_after_transaction_error
     assert_equal [:after_rollback], @second.history
   end
+
+  def test_after_rollback_callbacks_should_validate_on_condition
+    assert_raise(ArgumentError) { Topic.send(:after_rollback, :on => :save) }
+  end
+
+  def test_after_commit_callbacks_should_validate_on_condition
+    assert_raise(ArgumentError) { Topic.send(:after_commit, :on => :save) }
+  end
 end
 
 
-class TransactionObserverCallbacksTest < ActiveRecord::TestCase
+class SaveFromAfterCommitBlockTest < ActiveRecord::TestCase
   self.use_transactional_fixtures = false
-  fixtures :topics
 
-  class TopicWithObserverAttached < ActiveRecord::Base
-    set_table_name :topics
-    def history
-      @history ||= []
+  class TopicWithSaveInCallback < ActiveRecord::Base
+    self.table_name = :topics
+    after_commit :cache_topic, :on => :create
+    after_commit :call_update, :on => :update
+    attr_accessor :cached, :record_updated
+
+    def call_update
+      self.record_updated = true
+    end
+
+    def cache_topic
+      unless cached
+        self.cached = true
+        self.save
+      else
+        self.cached = false
+      end
     end
   end
 
-  class TopicWithObserverAttachedObserver < ActiveRecord::Observer
-    def after_commit(record)
-      record.history.push "after_commit"
-    end
-
-    def after_rollback(record)
-      record.history.push "after_rollback"
-    end
-  end
-
-  def test_after_commit_called
-    assert TopicWithObserverAttachedObserver.instance, 'should have observer'
-
-    topic = TopicWithObserverAttached.new
-    topic.save!
-
-    assert_equal %w{ after_commit }, topic.history
-  end
-
-  def test_after_rollback_called
-    assert TopicWithObserverAttachedObserver.instance, 'should have observer'
-
-    topic = TopicWithObserverAttached.new
-
-    Topic.transaction do
-      topic.save!
-      raise ActiveRecord::Rollback
-    end
-
-    assert_equal %w{ after_rollback }, topic.history
+  def test_after_commit_in_save
+    topic = TopicWithSaveInCallback.new()
+    topic.save
+    assert_equal true, topic.cached
+    assert_equal true, topic.record_updated
   end
 end

@@ -1,25 +1,21 @@
 require 'active_support/core_ext/hash/except'
 require 'active_support/core_ext/hash/slice'
-require 'active_support/core_ext/array/wrap'
-
 
 module ActiveModel
-  # == Active Model Serialization
+  # == Active \Model \Serialization
   #
   # Provides a basic serialization to a serializable_hash for your object.
   #
   # A minimal implementation could be:
   #
   #   class Person
-  #
   #     include ActiveModel::Serialization
   #
   #     attr_accessor :name
   #
   #     def attributes
-  #       {'name' => name}
+  #       {'name' => nil}
   #     end
-  #
   #   end
   #
   # Which would provide you with:
@@ -29,27 +25,28 @@ module ActiveModel
   #   person.name = "Bob"
   #   person.serializable_hash   # => {"name"=>"Bob"}
   #
-  # You need to declare some sort of attributes hash which contains the attributes
-  # you want to serialize and their current value.
+  # You need to declare an attributes hash which contains the attributes you
+  # want to serialize. Attributes must be strings, not symbols. When called,
+  # serializable hash will use instance methods that match the name of the
+  # attributes hash's keys. In order to override this behavior, take a look at
+  # the private method +read_attribute_for_serialization+.
   #
   # Most of the time though, you will want to include the JSON or XML
   # serializations. Both of these modules automatically include the
-  # ActiveModel::Serialization module, so there is no need to explicitly
-  # include it.
+  # <tt>ActiveModel::Serialization</tt> module, so there is no need to
+  # explicitly include it.
   #
-  # So a minimal implementation including XML and JSON would be:
+  # A minimal implementation including XML and JSON would be:
   #
   #   class Person
-  #
   #     include ActiveModel::Serializers::JSON
   #     include ActiveModel::Serializers::Xml
   #
   #     attr_accessor :name
   #
   #     def attributes
-  #       {'name' => name}
+  #       {'name' => nil}
   #     end
-  #
   #   end
   #
   # Which would provide you with:
@@ -66,27 +63,55 @@ module ActiveModel
   #   person.to_json             # => "{\"name\":\"Bob\"}"
   #   person.to_xml              # => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<serial-person...
   #
-  # Valid options are <tt>:only</tt>, <tt>:except</tt> and <tt>:methods</tt> .
+  # Valid options are <tt>:only</tt>, <tt>:except</tt>, <tt>:methods</tt> and
+  # <tt>:include</tt>. The following are all valid examples:
+  #
+  #   person.serializable_hash(only: 'name')
+  #   person.serializable_hash(include: :address)
+  #   person.serializable_hash(include: { address: { only: 'city' }})
   module Serialization
+    # Returns a serialized hash of your object.
+    #
+    #   class Person
+    #     include ActiveModel::Serialization
+    #
+    #     attr_accessor :name, :age
+    #
+    #     def attributes
+    #       {'name' => nil, 'age' => nil}
+    #     end
+    #
+    #     def capitalized_name
+    #       name.capitalize
+    #     end
+    #   end
+    #
+    #   person = Person.new
+    #   person.name = 'bob'
+    #   person.age  = 22
+    #   person.serializable_hash                # => {"name"=>"bob", "age"=>22}
+    #   person.serializable_hash(only: :name)   # => {"name"=>"bob"}
+    #   person.serializable_hash(except: :name) # => {"age"=>22}
+    #   person.serializable_hash(methods: :capitalized_name)
+    #   # => {"name"=>"bob", "age"=>22, "capitalized_name"=>"Bob"}
     def serializable_hash(options = nil)
       options ||= {}
 
-      attribute_names = attributes.keys.sort
+      attribute_names = attributes.keys
       if only = options[:only]
-        attribute_names &= Array.wrap(only).map(&:to_s)
+        attribute_names &= Array(only).map(&:to_s)
       elsif except = options[:except]
-        attribute_names -= Array.wrap(except).map(&:to_s)
+        attribute_names -= Array(except).map(&:to_s)
       end
 
       hash = {}
       attribute_names.each { |n| hash[n] = read_attribute_for_serialization(n) }
 
-      method_names = Array.wrap(options[:methods]).select { |n| respond_to?(n) }
-      method_names.each { |n| hash[n] = send(n) }
+      Array(options[:methods]).each { |m| hash[m.to_s] = send(m) if respond_to?(m) }
 
       serializable_add_includes(options) do |association, records, opts|
-        hash[association] = if records.is_a?(Enumerable)
-          records.map { |a| a.serializable_hash(opts) }
+        hash[association.to_s] = if records.respond_to?(:to_ary)
+          records.to_ary.map { |a| a.serializable_hash(opts) }
         else
           records.serializable_hash(opts)
         end
@@ -113,7 +138,6 @@ module ActiveModel
       #       @data[key]
       #     end
       #   end
-      #
       alias :read_attribute_for_serialization :send
 
       # Add associations specified via the <tt>:include</tt> option.
@@ -123,13 +147,13 @@ module ActiveModel
       #   +records+     - the association record(s) to be serialized
       #   +opts+        - options for the association records
       def serializable_add_includes(options = {}) #:nodoc:
-        return unless include = options[:include]
+        return unless includes = options[:include]
 
-        unless include.is_a?(Hash)
-          include = Hash[Array.wrap(include).map { |n| n.is_a?(Hash) ? n.to_a.first : [n, {}] }]
+        unless includes.is_a?(Hash)
+          includes = Hash[Array(includes).map { |n| n.is_a?(Hash) ? n.to_a.first : [n, {}] }]
         end
 
-        include.each do |association, opts|
+        includes.each do |association, opts|
           if records = send(association)
             yield association, records, opts
           end

@@ -1,11 +1,5 @@
 require File.expand_path('../../../load_paths', __FILE__)
 
-lib = File.expand_path("#{File.dirname(__FILE__)}/../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
-
-activemodel_path = File.expand_path('../../../activemodel/lib', __FILE__)
-$:.unshift(activemodel_path) if File.directory?(activemodel_path) && !$:.include?(activemodel_path)
-
 $:.unshift(File.dirname(__FILE__) + '/lib')
 $:.unshift(File.dirname(__FILE__) + '/fixtures/helpers')
 $:.unshift(File.dirname(__FILE__) + '/fixtures/alternate_helpers')
@@ -14,17 +8,14 @@ ENV['TMPDIR'] = File.join(File.dirname(__FILE__), 'tmp')
 
 require 'active_support/core_ext/kernel/reporting'
 
-require 'active_support/core_ext/string/encoding'
-if "ruby".encoding_aware?
-  # These are the normal settings that will be set up by Railties
-  # TODO: Have these tests support other combinations of these values
-  silence_warnings do
-    Encoding.default_internal = "UTF-8"
-    Encoding.default_external = "UTF-8"
-  end
+# These are the normal settings that will be set up by Railties
+# TODO: Have these tests support other combinations of these values
+silence_warnings do
+  Encoding.default_internal = "UTF-8"
+  Encoding.default_external = "UTF-8"
 end
 
-require 'test/unit'
+require 'active_support/testing/autorun'
 require 'abstract_controller'
 require 'action_controller'
 require 'action_view'
@@ -34,7 +25,6 @@ require 'active_support/dependencies'
 require 'active_model'
 require 'active_record'
 require 'action_controller/caching'
-require 'action_controller/caching/sweeping'
 
 require 'pp' # require 'pp' early to prevent hidden_methods from not picking up the pretty-print methods until too late
 
@@ -73,7 +63,17 @@ module RackTestUtils
 end
 
 module RenderERBUtils
+  def view
+    @view ||= begin
+      path = ActionView::FileSystemResolver.new(FIXTURE_LOAD_PATH)
+      view_paths = ActionView::PathSet.new([path])
+      ActionView::Base.new(view_paths)
+    end
+  end
+
   def render_erb(string)
+    @virtual_path = nil
+
     template = ActionView::Template.new(
       string.strip,
       "test template",
@@ -84,47 +84,44 @@ module RenderERBUtils
   end
 end
 
-module SetupOnce
-  extend ActiveSupport::Concern
-
-  included do
-    cattr_accessor :setup_once_block
-    self.setup_once_block = nil
-
-    setup :run_setup_once
-  end
-
-  module ClassMethods
-    def setup_once(&block)
-      self.setup_once_block = block
-    end
-  end
-
-  private
-    def run_setup_once
-      if self.setup_once_block
-        self.setup_once_block.call
-        self.setup_once_block = nil
-      end
-    end
-end
-
 SharedTestRoutes = ActionDispatch::Routing::RouteSet.new
 
-module ActiveSupport
-  class TestCase
-    include SetupOnce
-    # Hold off drawing routes until all the possible controller classes
-    # have been loaded.
-    setup_once do
+module ActionDispatch
+  module SharedRoutes
+    def before_setup
+      @routes = SharedTestRoutes
+      super
+    end
+  end
+
+  # Hold off drawing routes until all the possible controller classes
+  # have been loaded.
+  module DrawOnce
+    class << self
+      attr_accessor :drew
+    end
+    self.drew = false
+
+    def before_setup
+      super
+      return if DrawOnce.drew
+
       SharedTestRoutes.draw do
-        match ':controller(/:action)'
+        get ':controller(/:action)'
       end
 
       ActionDispatch::IntegrationTest.app.routes.draw do
-        match ':controller(/:action)'
+        get ':controller(/:action)'
       end
+
+      DrawOnce.drew = true
     end
+  end
+end
+
+module ActiveSupport
+  class TestCase
+    include ActionDispatch::DrawOnce
   end
 end
 
@@ -158,18 +155,17 @@ class BasicController
 end
 
 class ActionDispatch::IntegrationTest < ActiveSupport::TestCase
-  setup do
-    @routes = SharedTestRoutes
-  end
+  include ActionDispatch::SharedRoutes
 
   def self.build_app(routes = nil)
     RoutedRackApp.new(routes || ActionDispatch::Routing::RouteSet.new) do |middleware|
-      middleware.use "ActionDispatch::ShowExceptions"
+      middleware.use "ActionDispatch::ShowExceptions", ActionDispatch::PublicExceptions.new("#{FIXTURE_LOAD_PATH}/public")
+      middleware.use "ActionDispatch::DebugExceptions"
       middleware.use "ActionDispatch::Callbacks"
       middleware.use "ActionDispatch::ParamsParser"
       middleware.use "ActionDispatch::Cookies"
       middleware.use "ActionDispatch::Flash"
-      middleware.use "ActionDispatch::Head"
+      middleware.use "Rack::Head"
       yield(middleware) if block_given?
     end
   end
@@ -246,7 +242,7 @@ class Rack::TestCase < ActionDispatch::IntegrationTest
   end
 
   def assert_body(body)
-    assert_equal body, Array.wrap(response.body).join
+    assert_equal body, Array(response.body).join
   end
 
   def assert_status(code)
@@ -254,7 +250,7 @@ class Rack::TestCase < ActionDispatch::IntegrationTest
   end
 
   def assert_response(body, status = 200, headers = {})
-    assert_body   body
+    assert_body body
     assert_status status
     headers.each do |header, value|
       assert_header header, value
@@ -275,6 +271,7 @@ module ActionController
     include ActionController::Testing
     # This stub emulates the Railtie including the URL helpers from a Rails application
     include SharedTestRoutes.url_helpers
+    include SharedTestRoutes.mounted_helpers
 
     self.view_paths = FIXTURE_LOAD_PATH
 
@@ -287,10 +284,7 @@ module ActionController
 
   class TestCase
     include ActionDispatch::TestProcess
-
-    setup do
-      @routes = SharedTestRoutes
-    end
+    include ActionDispatch::SharedRoutes
   end
 end
 
@@ -301,9 +295,7 @@ module ActionView
   class TestCase
     # Must repeat the setup because AV::TestCase is a duplication
     # of AC::TestCase
-    setup do
-      @routes = SharedTestRoutes
-    end
+    include ActionDispatch::SharedRoutes
   end
 end
 
@@ -326,18 +318,63 @@ class Workshop
 end
 
 module ActionDispatch
-  class ShowExceptions
+  class DebugExceptions
     private
-      remove_method :public_path
-      def public_path
-        "#{FIXTURE_LOAD_PATH}/public"
-      end
-
-      remove_method :logger
-      # Silence logger
-      def logger
-        nil
-      end
+    remove_method :stderr_logger
+    # Silence logger
+    def stderr_logger
+      nil
+    end
   end
 end
 
+module ActionDispatch
+  module RoutingVerbs
+    def get(uri_or_host, path = nil, port = nil)
+      host = uri_or_host.host unless path
+      path ||= uri_or_host.path
+
+      params = {'PATH_INFO'      => path,
+                'REQUEST_METHOD' => 'GET',
+                'HTTP_HOST'      => host}
+
+      routes.call(params)[2].join
+    end
+  end
+end
+
+module RoutingTestHelpers
+  def url_for(set, options, recall = nil)
+    set.send(:url_for, options.merge(:only_path => true, :_recall => recall))
+  end
+end
+
+class ResourcesController < ActionController::Base
+  def index() render :nothing => true end
+  alias_method :show, :index
+end
+
+class ThreadsController  < ResourcesController; end
+class MessagesController < ResourcesController; end
+class CommentsController < ResourcesController; end
+class ReviewsController < ResourcesController; end
+class AuthorsController < ResourcesController; end
+class LogosController < ResourcesController; end
+
+class AccountsController <  ResourcesController; end
+class AdminController   <  ResourcesController; end
+class ProductsController < ResourcesController; end
+class ImagesController < ResourcesController; end
+class PreferencesController < ResourcesController; end
+
+module Backoffice
+  class ProductsController < ResourcesController; end
+  class TagsController < ResourcesController; end
+  class ManufacturersController < ResourcesController; end
+  class ImagesController < ResourcesController; end
+
+  module Admin
+    class ProductsController < ResourcesController; end
+    class ImagesController < ResourcesController; end
+  end
+end

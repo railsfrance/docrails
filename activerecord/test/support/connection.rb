@@ -1,5 +1,6 @@
-require 'logger'
-require_dependency 'models/course'
+require 'active_support/logger'
+require 'models/college'
+require 'models/course'
 
 module ARTest
   def self.connection_name
@@ -11,10 +12,10 @@ module ARTest
   end
 
   def self.connect
-    puts "Using #{connection_name} with Identity Map #{ActiveRecord::IdentityMap.enabled? ? 'on' : 'off'}"
-    ActiveRecord::Base.logger = Logger.new("debug.log")
+    puts "Using #{connection_name}"
+    ActiveRecord::Base.logger = ActiveSupport::Logger.new("debug.log", 0, 100 * 1024 * 1024)
     ActiveRecord::Base.configurations = connection_config
     ActiveRecord::Base.establish_connection 'arunit'
-    Course.establish_connection 'arunit2'
+    ARUnit2Model.establish_connection 'arunit2'
   end
 end

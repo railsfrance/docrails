@@ -1,14 +1,14 @@
-require "active_support/values/time_zone"
+require 'active_support/values/time_zone'
 require 'active_support/core_ext/object/acts_like'
-require 'active_support/core_ext/object/inclusion'
 
 module ActiveSupport
-  # A Time-like class that can represent a time in any time zone. Necessary because standard Ruby Time instances are
-  # limited to UTC and the system's <tt>ENV['TZ']</tt> zone.
+  # A Time-like class that can represent a time in any time zone. Necessary
+  # because standard Ruby Time instances are limited to UTC and the
+  # system's <tt>ENV['TZ']</tt> zone.
   #
-  # You shouldn't ever need to create a TimeWithZone instance directly via <tt>new</tt> . Instead use methods
-  # +local+, +parse+, +at+ and +now+ on TimeZone instances, and +in_time_zone+ on Time and DateTime instances.
-  # Examples:
+  # You shouldn't ever need to create a TimeWithZone instance directly via +new+.
+  # Instead use methods +local+, +parse+, +at+ and +now+ on TimeZone instances,
+  # and +in_time_zone+ on Time and DateTime instances.
   #
   #   Time.zone = 'Eastern Time (US & Canada)'        # => 'Eastern Time (US & Canada)'
   #   Time.zone.local(2007, 2, 10, 15, 30, 45)        # => Sat, 10 Feb 2007 15:30:45 EST -05:00
@@ -19,8 +19,8 @@ module ActiveSupport
   #
   # See Time and TimeZone for further documentation of these methods.
   #
-  # TimeWithZone instances implement the same API as Ruby Time instances, so that Time and TimeWithZone instances are interchangeable.
-  # Examples:
+  # TimeWithZone instances implement the same API as Ruby Time instances, so
+  # that Time and TimeWithZone instances are interchangeable.
   #
   #   t = Time.zone.now                     # => Sun, 18 May 2008 13:27:25 EDT -04:00
   #   t.hour                                # => 13
@@ -33,10 +33,11 @@ module ActiveSupport
   #   t > Time.utc(1999)                    # => true
   #   t.is_a?(Time)                         # => true
   #   t.is_a?(ActiveSupport::TimeWithZone)  # => true
-  #
   class TimeWithZone
+
+    # Report class name as 'Time' to thwart type checking.
     def self.name
-      'Time' # Report class name as 'Time' to thwart type checking
+      'Time'
     end
 
     include Comparable
@@ -72,33 +73,56 @@ module ActiveSupport
       utc.in_time_zone(new_zone)
     end
 
-    # Returns a <tt>Time.local()</tt> instance of the simultaneous time in your system's <tt>ENV['TZ']</tt> zone
+    # Returns a <tt>Time.local()</tt> instance of the simultaneous time in your
+    # system's <tt>ENV['TZ']</tt> zone.
     def localtime
       utc.respond_to?(:getlocal) ? utc.getlocal : utc.to_time.getlocal
     end
     alias_method :getlocal, :localtime
 
+    # Returns true if the current time is within Daylight Savings Time for the
+    # specified time zone.
+    #
+    #   Time.zone = 'Eastern Time (US & Canada)'    # => 'Eastern Time (US & Canada)'
+    #   Time.zone.parse("2012-5-30").dst?           # => true
+    #   Time.zone.parse("2012-11-30").dst?          # => false
     def dst?
       period.dst?
     end
     alias_method :isdst, :dst?
 
+    # Returns true if the current time zone is set to UTC.
+    #
+    #   Time.zone = 'UTC'                           # => 'UTC'
+    #   Time.zone.now.utc?                          # => true
+    #   Time.zone = 'Eastern Time (US & Canada)'    # => 'Eastern Time (US & Canada)'
+    #   Time.zone.now.utc?                          # => false
     def utc?
       time_zone.name == 'UTC'
     end
     alias_method :gmt?, :utc?
 
+    # Returns the offset from current time to UTC time in seconds.
     def utc_offset
       period.utc_total_offset
     end
     alias_method :gmt_offset, :utc_offset
     alias_method :gmtoff, :utc_offset
 
+    # Returns a formatted string of the offset from UTC, or an alternative
+    # string if the time zone is already UTC.
+    #
+    #   Time.zone = 'Eastern Time (US & Canada)'   # => "Eastern Time (US & Canada)"
+    #   Time.zone.now.formatted_offset(true)       # => "-05:00"
+    #   Time.zone.now.formatted_offset(false)      # => "-0500"
+    #   Time.zone = 'UTC'                          # => "UTC"
+    #   Time.zone.now.formatted_offset(true, "0")  # => "0"
     def formatted_offset(colon = true, alternate_utc_string = nil)
       utc? && alternate_utc_string || TimeZone.seconds_to_utc_offset(utc_offset, colon)
     end
 
-    # Time uses +zone+ to display the time zone abbreviation, so we're duck-typing it.
+    # Time uses +zone+ to display the time zone abbreviation, so we're
+    # duck-typing it.
     def zone
       period.zone_identifier.to_s
     end
@@ -116,11 +140,10 @@ module ActiveSupport
     end
     alias_method :iso8601, :xmlschema
 
-    # Coerces time to a string for JSON encoding. The default format is ISO 8601. You can get
-    # %Y/%m/%d %H:%M:%S +offset style by setting <tt>ActiveSupport::JSON::Encoding.use_standard_json_time_format</tt>
-    # to false.
-    #
-    # ==== Examples
+    # Coerces time to a string for JSON encoding. The default format is ISO 8601.
+    # You can get %Y/%m/%d %H:%M:%S +offset style by setting
+    # <tt>ActiveSupport::JSON::Encoding.use_standard_json_time_format</tt>
+    # to +false+.
     #
     #   # With ActiveSupport::JSON::Encoding.use_standard_json_time_format = true
     #   Time.utc(2005,2,1,15,15,10).in_time_zone.to_json
@@ -129,7 +152,6 @@ module ActiveSupport
     #   # With ActiveSupport::JSON::Encoding.use_standard_json_time_format = false
     #   Time.utc(2005,2,1,15,15,10).in_time_zone.to_json
     #   # => "2005/02/01 15:15:10 +0000"
-    #
     def as_json(options = nil)
       if ActiveSupport::JSON::Encoding.use_standard_json_time_format
         xmlschema
@@ -146,16 +168,18 @@ module ActiveSupport
       end
     end
 
-    def to_yaml(options = {})
-      return super if defined?(YAML::ENGINE) && !YAML::ENGINE.syck?
-
-      utc.to_yaml(options)
-    end
-
+    # Returns a string of the object's date and time in the format used by
+    # HTTP requests.
+    #
+    #   Time.zone.now.httpdate  # => "Tue, 01 Jan 2013 04:39:43 GMT"
     def httpdate
       utc.httpdate
     end
 
+    # Returns a string of the object's date and time in the RFC 2822 standard
+    # format.
+    #
+    #   Time.zone.now.rfc2822  # => "Tue, 01 Jan 2013 04:51:39 +0000"
     def rfc2822
       to_s(:rfc822)
     end
@@ -174,10 +198,14 @@ module ActiveSupport
     end
     alias_method :to_formatted_s, :to_s
 
-    # Replaces <tt>%Z</tt> and <tt>%z</tt> directives with +zone+ and +formatted_offset+, respectively, before passing to
-    # Time#strftime, so that zone information is correct
+    # Replaces <tt>%Z</tt> and <tt>%z</tt> directives with +zone+ and
+    # +formatted_offset+, respectively, before passing to Time#strftime, so
+    # that zone information is correct
     def strftime(format)
-      format = format.gsub('%Z', zone).gsub('%z', formatted_offset(false))
+      format = format.gsub('%Z', zone)
+                     .gsub('%z',   formatted_offset(false))
+                     .gsub('%:z',  formatted_offset(true))
+                     .gsub('%::z', formatted_offset(true) + ":00")
       time.strftime(format)
     end
 
@@ -186,24 +214,34 @@ module ActiveSupport
       utc <=> other
     end
 
+    # Returns true if the current object's time is within the specified
+    # +min+ and +max+ time.
     def between?(min, max)
       utc.between?(min, max)
     end
 
+    # Returns true if the current object's time is in the past.
     def past?
       utc.past?
     end
 
+    # Returns true if the current object's time falls within
+    # the current day.
     def today?
       time.today?
     end
 
+    # Returns true if the current object's time is in the future.
     def future?
       utc.future?
     end
 
     def eql?(other)
-      utc == other
+      utc.eql?(other)
+    end
+
+    def hash
+      utc.hash
     end
 
     def +(other)
@@ -277,7 +315,6 @@ module ActiveSupport
     def to_i
       utc.to_i
     end
-    alias_method :hash, :to_i
     alias_method :tv_sec, :to_i
 
     # A TimeWithZone acts like a Time, so just return +self+.
@@ -313,17 +350,18 @@ module ActiveSupport
       initialize(variables[0].utc, ::Time.find_zone(variables[1]), variables[2].utc)
     end
 
-    # Ensure proxy class responds to all methods that underlying time instance responds to.
-    def respond_to?(sym, include_priv = false)
+    # Ensure proxy class responds to all methods that underlying time instance
+    # responds to.
+    def respond_to_missing?(sym, include_priv)
       # consistently respond false to acts_like?(:date), regardless of whether #time is a Time or DateTime
-      return false if sym.to_s == 'acts_like_date?'
-      super || time.respond_to?(sym, include_priv)
+      return false if sym.to_sym == :acts_like_date?
+      time.respond_to?(sym, include_priv)
     end
 
-    # Send the missing method to +time+ instance, and wrap result in a new TimeWithZone with the existing +time_zone+.
+    # Send the missing method to +time+ instance, and wrap result in a new
+    # TimeWithZone with the existing +time_zone+.
     def method_missing(sym, *args, &block)
-      result = time.__send__(sym, *args, &block)
-      result.acts_like?(:time) ? self.class.new(nil, time_zone, result) : result
+      wrap_with_time_zone time.__send__(sym, *args, &block)
     end
 
     private
@@ -341,11 +379,21 @@ module ActiveSupport
       end
 
       def transfer_time_values_to_utc_constructor(time)
-        ::Time.utc_time(time.year, time.month, time.day, time.hour, time.min, time.sec, time.respond_to?(:usec) ? time.usec : 0)
+        ::Time.utc(time.year, time.month, time.day, time.hour, time.min, time.sec, Rational(time.nsec, 1000))
       end
 
       def duration_of_variable_length?(obj)
-        ActiveSupport::Duration === obj && obj.parts.any? {|p| p[0].in?([:years, :months, :days]) }
+        ActiveSupport::Duration === obj && obj.parts.any? {|p| [:years, :months, :days].include?(p[0]) }
+      end
+
+      def wrap_with_time_zone(time)
+        if time.acts_like?(:time)
+          self.class.new(nil, time_zone, time)
+        elsif time.is_a?(Range)
+          wrap_with_time_zone(time.begin)..wrap_with_time_zone(time.end)
+        else
+          time
+        end
       end
   end
 end

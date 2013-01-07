@@ -1,21 +1,21 @@
-require 'active_support/base64'
-require 'active_support/core_ext/object/blank'
+require 'base64'
 
 module ActionController
+  # Makes it dead easy to do HTTP Basic, Digest and Token authentication.
   module HttpAuthentication
-    # Makes it dead easy to do HTTP \Basic and \Digest authentication.
+    # Makes it dead easy to do HTTP \Basic authentication.
     #
     # === Simple \Basic example
     #
     #   class PostsController < ApplicationController
-    #     http_basic_authenticate_with :name => "dhh", :password => "secret", :except => :index
+    #     http_basic_authenticate_with name: "dhh", password: "secret", except: :index
     #
     #     def index
-    #       render :text => "Everyone can see me!"
+    #       render text: "Everyone can see me!"
     #     end
     #
     #     def edit
-    #       render :text => "I'm only accessible if you know the password"
+    #       render text: "I'm only accessible if you know the password"
     #     end
     #  end
     #
@@ -25,7 +25,7 @@ module ActionController
     # the regular HTML interface is protected by a session approach:
     #
     #   class ApplicationController < ActionController::Base
-    #     before_filter :set_account, :authenticate
+    #     before_action :set_account, :authenticate
     #
     #     protected
     #       def set_account
@@ -60,47 +60,6 @@ module ActionController
     #
     #     assert_equal 200, status
     #   end
-    #
-    # === Simple \Digest example
-    #
-    #   require 'digest/md5'
-    #   class PostsController < ApplicationController
-    #     REALM = "SuperSecret"
-    #     USERS = {"dhh" => "secret", #plain text password
-    #              "dap" => Digest::MD5.hexdigest(["dap",REALM,"secret"].join(":"))  #ha1 digest password
-    #
-    #     before_filter :authenticate, :except => [:index]
-    #
-    #     def index
-    #       render :text => "Everyone can see me!"
-    #     end
-    #
-    #     def edit
-    #       render :text => "I'm only accessible if you know the password"
-    #     end
-    #
-    #     private
-    #       def authenticate
-    #         authenticate_or_request_with_http_digest(REALM) do |username|
-    #           USERS[username]
-    #         end
-    #       end
-    #   end
-    #
-    # === Notes
-    #
-    # The +authenticate_or_request_with_http_digest+ block must return the user's password
-    # or the ha1 digest hash so the framework can appropriately hash to check the user's
-    # credentials. Returning +nil+ will cause authentication to fail.
-    #
-    # Storing the ha1 hash: MD5(username:realm:password), is better than storing a plain password. If
-    # the password file or database is compromised, the attacker would be able to use the ha1 hash to
-    # authenticate as the user at this +realm+, but would not have the user's password to try using at
-    # other sites.
-    #
-    # In rare instances, web servers or front proxies strip authorization headers before
-    # they reach your application. You can debug this situation by logging all environment
-    # variables, and check for HTTP_AUTHORIZATION, amongst others.
     module Basic
       extend self
 
@@ -109,7 +68,7 @@ module ActionController
 
         module ClassMethods
           def http_basic_authenticate_with(options = {})
-            before_filter(options.except(:name, :password, :realm)) do
+            before_action(options.except(:name, :password, :realm)) do
               authenticate_or_request_with_http_basic(options[:realm] || "Application") do |name, password|
                 name == options[:name] && password == options[:password]
               end
@@ -141,11 +100,11 @@ module ActionController
       end
 
       def decode_credentials(request)
-        ActiveSupport::Base64.decode64(request.authorization.split(' ', 2).last || '')
+        ::Base64.decode64(request.authorization.split(' ', 2).last || '')
       end
 
       def encode_credentials(user_name, password)
-        "Basic #{ActiveSupport::Base64.encode64s("#{user_name}:#{password}")}"
+        "Basic #{::Base64.strict_encode64("#{user_name}:#{password}")}"
       end
 
       def authentication_request(controller, realm)
@@ -155,6 +114,48 @@ module ActionController
       end
     end
 
+    # Makes it dead easy to do HTTP \Digest authentication.
+    #
+    # === Simple \Digest example
+    #
+    #   require 'digest/md5'
+    #   class PostsController < ApplicationController
+    #     REALM = "SuperSecret"
+    #     USERS = {"dhh" => "secret", #plain text password
+    #              "dap" => Digest::MD5.hexdigest(["dap",REALM,"secret"].join(":"))}  #ha1 digest password
+    #
+    #     before_action :authenticate, except: [:index]
+    #
+    #     def index
+    #       render text: "Everyone can see me!"
+    #     end
+    #
+    #     def edit
+    #       render text: "I'm only accessible if you know the password"
+    #     end
+    #
+    #     private
+    #       def authenticate
+    #         authenticate_or_request_with_http_digest(REALM) do |username|
+    #           USERS[username]
+    #         end
+    #       end
+    #   end
+    #
+    # === Notes
+    #
+    # The +authenticate_or_request_with_http_digest+ block must return the user's password
+    # or the ha1 digest hash so the framework can appropriately hash to check the user's
+    # credentials. Returning +nil+ will cause authentication to fail.
+    #
+    # Storing the ha1 hash: MD5(username:realm:password), is better than storing a plain password. If
+    # the password file or database is compromised, the attacker would be able to use the ha1 hash to
+    # authenticate as the user at this +realm+, but would not have the user's password to try using at
+    # other sites.
+    #
+    # In rare instances, web servers or front proxies strip authorization headers before
+    # they reach your application. You can debug this situation by logging all environment
+    # variables, and check for HTTP_AUTHORIZATION, amongst others.
     module Digest
       extend self
 
@@ -192,12 +193,15 @@ module ActionController
           return false unless password
 
           method = request.env['rack.methodoverride.original_method'] || request.env['REQUEST_METHOD']
-          uri    = credentials[:uri][0,1] == '/' ? request.fullpath : request.url
+          uri    = credentials[:uri]
 
-         [true, false].any? do |password_is_ha1|
-           expected = expected_response(method, uri, credentials, password, password_is_ha1)
-           expected == credentials[:response]
-         end
+          [true, false].any? do |trailing_question_mark|
+            [true, false].any? do |password_is_ha1|
+              _uri = trailing_question_mark ? uri + "?" : uri
+              expected = expected_response(method, _uri, credentials, password, password_is_ha1)
+              expected == credentials[:response]
+            end
+          end
         end
       end
 
@@ -224,9 +228,9 @@ module ActionController
       end
 
       def decode_credentials(header)
-        Hash[header.to_s.gsub(/^Digest\s+/,'').split(',').map do |pair|
+        HashWithIndifferentAccess[header.to_s.gsub(/^Digest\s+/,'').split(',').map do |pair|
           key, value = pair.split('=', 2)
-          [key.strip.to_sym, value.to_s.gsub(/^"|"$/,'').gsub(/'/, '')]
+          [key.strip, value.to_s.gsub(/^"|"$/,'').delete('\'')]
         end]
       end
 
@@ -245,9 +249,9 @@ module ActionController
       end
 
       def secret_token(request)
-        secret = request.env["action_dispatch.secret_token"]
-        raise "You must set config.secret_token in your app's config" if secret.blank?
-        secret
+        key_generator  = request.env["action_dispatch.key_generator"]
+        http_auth_salt = request.env["action_dispatch.http_auth_salt"]
+        key_generator.generate_key(http_auth_salt)
       end
 
       # Uses an MD5 digest based on time to generate a value to be used only once.
@@ -260,7 +264,7 @@ module ActionController
       # The quality of the implementation depends on a good choice.
       # A nonce might, for example, be constructed as the base 64 encoding of
       #
-      # => time-stamp H(time-stamp ":" ETag ":" private-key)
+      #   time-stamp H(time-stamp ":" ETag ":" private-key)
       #
       # where time-stamp is a server-generated time or other non-repeating value,
       # ETag is the value of the HTTP ETag header associated with the requested entity,
@@ -276,7 +280,7 @@ module ActionController
       #
       # An implementation might choose not to accept a previously used nonce or a previously used digest, in order to
       # protect against a replay attack. Or, an implementation might choose to use one-time nonces or digests for
-      # POST or PUT requests and a time-stamp for GET requests. For more details on the issues involved see Section 4
+      # POST, PUT, or PATCH requests and a time-stamp for GET requests. For more details on the issues involved see Section 4
       # of this document.
       #
       # The nonce is opaque to the client. Composed of Time, and hash of Time with secret
@@ -286,16 +290,16 @@ module ActionController
         t = time.to_i
         hashed = [t, secret_key]
         digest = ::Digest::MD5.hexdigest(hashed.join(":"))
-        ActiveSupport::Base64.encode64("#{t}:#{digest}").gsub("\n", '')
+        ::Base64.strict_encode64("#{t}:#{digest}")
       end
 
       # Might want a shorter timeout depending on whether the request
-      # is a PUT or POST, and if client is browser or web service.
+      # is a PATCH, PUT, or POST, and if client is browser or web service.
       # Can be much shorter if the Stale directive is implemented. This would
       # allow a user to use new nonce without prompting user again for their
       # username and password.
       def validate_nonce(secret_key, request, value, seconds_to_timeout=5*60)
-        t = ActiveSupport::Base64.decode64(value).split(":").first.to_i
+        t = ::Base64.decode64(value).split(":").first.to_i
         nonce(secret_key, t) == value && (t - Time.now.to_i).abs <= seconds_to_timeout
       end
 
@@ -313,14 +317,14 @@ module ActionController
     #   class PostsController < ApplicationController
     #     TOKEN = "secret"
     #
-    #     before_filter :authenticate, :except => [ :index ]
+    #     before_action :authenticate, except: [ :index ]
     #
     #     def index
-    #       render :text => "Everyone can see me!"
+    #       render text: "Everyone can see me!"
     #     end
     #
     #     def edit
-    #       render :text => "I'm only accessible if you know the password"
+    #       render text: "I'm only accessible if you know the password"
     #     end
     #
     #     private
@@ -336,7 +340,7 @@ module ActionController
     # the regular HTML interface is protected by a session approach:
     #
     #   class ApplicationController < ActionController::Base
-    #     before_filter :set_account, :authenticate
+    #     before_action :set_account, :authenticate
     #
     #     protected
     #       def set_account
@@ -367,7 +371,7 @@ module ActionController
     #   def test_access_granted_from_xml
     #     get(
     #       "/notes/1.xml", nil,
-    #       :authorization => ActionController::HttpAuthentication::Token.encode_credentials(users(:dhh).token)
+    #       'HTTP_AUTHORIZATION' => ActionController::HttpAuthentication::Token.encode_credentials(users(:dhh).token)
     #     )
     #
     #     assert_equal 200, status
@@ -380,6 +384,8 @@ module ActionController
     #
     #   RewriteRule ^(.*)$ dispatch.fcgi [E=X-HTTP_AUTHORIZATION:%{HTTP:Authorization},QSA,L]
     module Token
+      TOKEN_REGEX = /^Token /
+      AUTHN_PAIR_DELIMITERS = /(?:,|;|\t+)/
       extend self
 
       module ControllerMethods
@@ -396,16 +402,20 @@ module ActionController
         end
       end
 
-      # If token Authorization header is present, call the login procedure with
-      # the present token and options.
+      # If token Authorization header is present, call the login
+      # procedure with the present token and options.
       #
-      # controller      - ActionController::Base instance for the current request.
-      # login_procedure - Proc to call if a token is present. The Proc should
-      #                   take 2 arguments:
-      #                     authenticate(controller) { |token, options| ... }
+      # [controller]
+      #   ActionController::Base instance for the current request.
       #
-      # Returns the return value of `&login_procedure` if a token is found.
-      # Returns nil if no token is found.
+      # [login_procedure]
+      #   Proc to call if a token is present. The Proc should take two arguments:
+      #
+      #     authenticate(controller) { |token, options| ... }
+      #
+      # Returns the return value of <tt>login_procedure</tt> if a
+      # token is found. Returns <tt>nil</tt> if no token is found.
+
       def authenticate(controller, &login_procedure)
         token, options = token_and_options(controller.request)
         unless token.blank?
@@ -416,23 +426,39 @@ module ActionController
       # Parses the token and options out of the token authorization header. If
       # the header looks like this:
       #   Authorization: Token token="abc", nonce="def"
-      # Then the returned token is "abc", and the options is {:nonce => "def"}
+      # Then the returned token is "abc", and the options is {nonce: "def"}
       #
       # request - ActionDispatch::Request instance with the current headers.
       #
       # Returns an Array of [String, Hash] if a token is present.
       # Returns nil if no token is found.
       def token_and_options(request)
-        if request.authorization.to_s[/^Token (.*)/]
-          values = Hash[$1.split(',').map do |value|
-            value.strip!                      # remove any spaces between commas and values
-            key, value = value.split(/\=\"?/) # split key=value pairs
-            value.chomp!('"')                 # chomp trailing " in value
-            value.gsub!(/\\\"/, '"')          # unescape remaining quotes
-            [key, value]
-          end]
-          [values.delete("token"), values.with_indifferent_access]
+        authorization_request = request.authorization.to_s
+        if authorization_request[TOKEN_REGEX]
+          params = token_params_from authorization_request
+          [params.shift.last, Hash[params].with_indifferent_access]
         end
+      end
+
+      def token_params_from(auth)
+        rewrite_param_values params_array_from raw_params auth
+      end
+
+      # Takes raw_params and turns it into an array of parameters
+      def params_array_from(raw_params)
+        raw_params.map { |param| param.split %r/=(.+)?/ }
+      end
+
+      # This removes the `"` characters wrapping the value.
+      def rewrite_param_values(array_params)
+        array_params.each { |param| param.last.gsub! %r/^"|"$/, '' }
+      end
+
+      # This method takes an authorization body and splits up the key-value
+      # pairs by the standardized `:`, `;`, or `\t` delimiters defined in
+      # `AUTHN_PAIR_DELIMITERS`.
+      def raw_params(auth)
+        auth.sub(TOKEN_REGEX, '').split(/"\s*#{AUTHN_PAIR_DELIMITERS}\s*/)
       end
 
       # Encodes the given token and options into an Authorization header value.

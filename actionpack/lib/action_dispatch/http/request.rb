@@ -17,7 +17,10 @@ module ActionDispatch
     include ActionDispatch::Http::Upload
     include ActionDispatch::Http::URL
 
-    LOCALHOST   = [/^127\.0\.0\.\d{1,3}$/, "::1", /^0:0:0:0:0:0:0:1(%.*)?$/].freeze
+    autoload :Session, 'action_dispatch/request/session'
+
+    LOCALHOST   = Regexp.union [/^127\.0\.0\.\d{1,3}$/, /^::1$/, /^0:0:0:0:0:0:0:1(%.*)?$/]
+
     ENV_METHODS = %w[ AUTH_TYPE GATEWAY_INTERFACE
         PATH_TRANSLATED REMOTE_HOST
         REMOTE_IDENT REMOTE_USER REMOTE_ADDR
@@ -35,12 +38,15 @@ module ActionDispatch
       METHOD
     end
 
-    def self.new(env)
-      if request = env["action_dispatch.request"] && request.instance_of?(self)
-        return request
-      end
-
+    def initialize(env)
       super
+      @method            = nil
+      @request_method    = nil
+      @remote_ip         = nil
+      @original_fullpath = nil
+      @fullpath          = nil
+      @ip                = nil
+      @uuid              = nil
     end
 
     def key?(key)
@@ -64,7 +70,13 @@ module ActionDispatch
     RFC5789 = %w(PATCH)
 
     HTTP_METHODS = RFC2616 + RFC2518 + RFC3253 + RFC3648 + RFC3744 + RFC5323 + RFC5789
-    HTTP_METHOD_LOOKUP = Hash.new { |h, m| h[m] = m.underscore.to_sym if HTTP_METHODS.include?(m) }
+
+    HTTP_METHOD_LOOKUP = {}
+
+    # Populate the HTTP method lookup cache
+    HTTP_METHODS.each { |method|
+      HTTP_METHOD_LOOKUP[method] = method.underscore.to_sym
+    }
 
     # Returns the HTTP \method that the application should see.
     # In the case where the \method was overridden by a middleware
@@ -94,33 +106,39 @@ module ActionDispatch
     end
 
     # Is this a GET (or HEAD) request?
-    # Equivalent to <tt>request.request_method == :get</tt>.
+    # Equivalent to <tt>request.request_method_symbol == :get</tt>.
     def get?
       HTTP_METHOD_LOOKUP[request_method] == :get
     end
 
     # Is this a POST request?
-    # Equivalent to <tt>request.request_method == :post</tt>.
+    # Equivalent to <tt>request.request_method_symbol == :post</tt>.
     def post?
       HTTP_METHOD_LOOKUP[request_method] == :post
     end
 
+    # Is this a PATCH request?
+    # Equivalent to <tt>request.request_method == :patch</tt>.
+    def patch?
+      HTTP_METHOD_LOOKUP[request_method] == :patch
+    end
+
     # Is this a PUT request?
-    # Equivalent to <tt>request.request_method == :put</tt>.
+    # Equivalent to <tt>request.request_method_symbol == :put</tt>.
     def put?
       HTTP_METHOD_LOOKUP[request_method] == :put
     end
 
     # Is this a DELETE request?
-    # Equivalent to <tt>request.request_method == :delete</tt>.
+    # Equivalent to <tt>request.request_method_symbol == :delete</tt>.
     def delete?
       HTTP_METHOD_LOOKUP[request_method] == :delete
     end
 
     # Is this a HEAD request?
-    # Equivalent to <tt>request.method == :head</tt>.
+    # Equivalent to <tt>request.request_method_symbol == :head</tt>.
     def head?
-      HTTP_METHOD_LOOKUP[method] == :head
+      HTTP_METHOD_LOOKUP[request_method] == :head
     end
 
     # Provides access to the request's HTTP headers, for example:
@@ -130,8 +148,16 @@ module ActionDispatch
       Http::Headers.new(@env)
     end
 
+    def original_fullpath
+      @original_fullpath ||= (env["ORIGINAL_FULLPATH"] || fullpath)
+    end
+
     def fullpath
       @fullpath ||= super
+    end
+
+    def original_url
+      base_url + original_fullpath
     end
 
     def media_type
@@ -155,24 +181,7 @@ module ActionDispatch
       @ip ||= super
     end
 
-    # Which IP addresses are "trusted proxies" that can be stripped from
-    # the right-hand-side of X-Forwarded-For.
-    #
-    # http://en.wikipedia.org/wiki/Private_network#Private_IPv4_address_spaces.
-    TRUSTED_PROXIES = %r{
-      ^127\.0\.0\.1$                | # localhost
-      ^(10                          | # private IP 10.x.x.x
-        172\.(1[6-9]|2[0-9]|3[0-1]) | # private IP in the range 172.16.0.0 .. 172.31.255.255
-        192\.168                      # private IP 192.168.x.x
-       )\.
-    }x
-
-    # Determines originating IP address. REMOTE_ADDR is the standard
-    # but will fail if the user is behind a proxy. HTTP_CLIENT_IP and/or
-    # HTTP_X_FORWARDED_FOR are set by proxies so check for these if
-    # REMOTE_ADDR is a proxy. HTTP_X_FORWARDED_FOR may be a comma-
-    # delimited list in the case of multiple chained proxies; the last
-    # address which is not trusted is the originating IP.
+    # Originating IP address, usually set by the RemoteIp middleware.
     def remote_ip
       @remote_ip ||= (@env["action_dispatch.remote_ip"] || ip).to_s
     end
@@ -196,8 +205,9 @@ module ActionDispatch
     # work with raw requests directly.
     def raw_post
       unless @env.include? 'RAW_POST_DATA'
-        @env['RAW_POST_DATA'] = body.read(@env['CONTENT_LENGTH'].to_i)
-        body.rewind if body.respond_to?(:rewind)
+        raw_post_body = body
+        @env['RAW_POST_DATA'] = raw_post_body.read(@env['CONTENT_LENGTH'].to_i)
+        raw_post_body.rewind if raw_post_body.respond_to?(:rewind)
       end
       @env['RAW_POST_DATA']
     end
@@ -206,7 +216,7 @@ module ActionDispatch
     # variable is already set, wrap it in a StringIO.
     def body
       if raw_post = @env['RAW_POST_DATA']
-        raw_post.force_encoding(Encoding::BINARY) if raw_post.respond_to?(:force_encoding)
+        raw_post.force_encoding(Encoding::BINARY)
         StringIO.new(raw_post)
       else
         @env['rack.input']
@@ -224,31 +234,37 @@ module ActionDispatch
     # TODO This should be broken apart into AD::Request::Session and probably
     # be included by the session middleware.
     def reset_session
-      session.destroy if session && session.respond_to?(:destroy)
-      self.session = {}
+      if session && session.respond_to?(:destroy)
+        session.destroy
+      else
+        self.session = {}
+      end
       @env['action_dispatch.request.flash_hash'] = nil
     end
 
     def session=(session) #:nodoc:
-      @env['rack.session'] = session
+      Session.set @env, session
     end
 
     def session_options=(options)
-      @env['rack.session.options'] = options
+      Session::Options.set @env, options
     end
 
     # Override Rack's GET method to support indifferent access
     def GET
       @env["action_dispatch.request.query_parameters"] ||= (normalize_parameters(super) || {})
+    rescue TypeError => e
+      raise ActionController::BadRequest.new(:query, e)
     end
     alias :query_parameters :GET
 
     # Override Rack's POST method to support indifferent access
     def POST
       @env["action_dispatch.request.request_parameters"] ||= (normalize_parameters(super) || {})
+    rescue TypeError => e
+      raise ActionController::BadRequest.new(:request, e)
     end
     alias :request_parameters :POST
-
 
     # Returns the authorization header regardless of whether it was specified directly or through one of the
     # proxy alternatives.
@@ -261,7 +277,28 @@ module ActionDispatch
 
     # True if the request came from localhost, 127.0.0.1.
     def local?
-      LOCALHOST.any? { |local_ip| local_ip === remote_addr && local_ip === remote_ip }
+      LOCALHOST =~ remote_addr && LOCALHOST =~ remote_ip
+    end
+
+    protected
+
+    # Remove nils from the params hash
+    def deep_munge(hash)
+      hash.each_value do |v|
+        case v
+        when Array
+          v.grep(Hash) { |x| deep_munge(x) }
+          v.compact!
+        when Hash
+          deep_munge(v)
+        end
+      end
+
+      hash
+    end
+
+    def parse_query(qs)
+      deep_munge(super)
     end
 
     private

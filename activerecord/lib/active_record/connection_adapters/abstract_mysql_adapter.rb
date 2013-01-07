@@ -1,20 +1,22 @@
-require 'active_support/core_ext/object/blank'
+require 'arel/visitors/bind_visitor'
 
 module ActiveRecord
   module ConnectionAdapters
     class AbstractMysqlAdapter < AbstractAdapter
       class Column < ConnectionAdapters::Column # :nodoc:
-        attr_reader :collation
+        attr_reader :collation, :strict
 
-        def initialize(name, default, sql_type = nil, null = true, collation = nil)
-          super(name, default, sql_type, null)
+        def initialize(name, default, sql_type = nil, null = true, collation = nil, strict = false)
+          @strict    = strict
           @collation = collation
+
+          super(name, default, sql_type, null)
         end
 
         def extract_default(default)
-          if sql_type =~ /blob/i || type == :text
+          if blob_or_text_column?
             if default.blank?
-              return null ? nil : ''
+              null || strict ? nil : ''
             else
               raise ArgumentError, "#{type} columns cannot have a default value: #{default.inspect}"
             end
@@ -26,8 +28,12 @@ module ActiveRecord
         end
 
         def has_default?
-          return false if sql_type =~ /blob/i || type == :text #mysql forbids defaults on blob and text columns
+          return false if blob_or_text_column? #mysql forbids defaults on blob and text columns
           super
+        end
+        
+        def blob_or_text_column?
+          sql_type =~ /blob/i || type == :text
         end
 
         # Must return the relevant concrete adapter
@@ -71,6 +77,8 @@ module ActiveRecord
           when /^mediumint/i; 3
           when /^smallint/i;  2
           when /^tinyint/i;   1
+          when /^enum\((.+)\)/i
+            $1.split(',').map{|enum| enum.strip.length - 2}.max
           else
             super
           end
@@ -122,15 +130,21 @@ module ActiveRecord
         :boolean     => { :name => "tinyint", :limit => 1 }
       }
 
+      class BindSubstitution < Arel::Visitors::MySQL # :nodoc:
+        include Arel::Visitors::BindVisitor
+      end
+
       # FIXME: Make the first parameter more similar for the two adapters
       def initialize(connection, logger, connection_options, config)
         super(connection, logger)
         @connection_options, @config = connection_options, config
         @quoted_column_names, @quoted_table_names = {}, {}
-      end
 
-      def self.visitor_for(pool) # :nodoc:
-        Arel::Visitors::MySQL.new(pool)
+        if config.fetch(:prepared_statements) { true }
+          @visitor = Arel::Visitors::MySQL.new self
+        else
+          @visitor = BindSubstitution.new self
+        end
       end
 
       def adapter_name #:nodoc:
@@ -153,6 +167,20 @@ module ActiveRecord
 
       def supports_bulk_alter? #:nodoc:
         true
+      end
+
+      # Technically MySQL allows to create indexes with the sort order syntax
+      # but at the moment (5.5) it doesn't yet implement them
+      def supports_index_sort_order?
+        true
+      end
+
+      # MySQL 4 technically support transaction isolation, but it is affected by a bug
+      # where the transaction level gets persisted for the whole session:
+      #
+      # http://bugs.mysql.com/bug.php?id=39170
+      def supports_transaction_isolation?
+        version[0] >= 5
       end
 
       def native_database_types
@@ -238,7 +266,7 @@ module ActiveRecord
       end
 
       # MysqlAdapter has to free a result after using it, so we use this method to write
-      # stuff in a abstract way without concerning ourselves about whether it needs to be
+      # stuff in an abstract way without concerning ourselves about whether it needs to be
       # explicitly freed or not.
       def execute_and_free(sql, name = nil) #:nodoc:
         yield execute(sql, name)
@@ -251,19 +279,26 @@ module ActiveRecord
 
       def begin_db_transaction
         execute "BEGIN"
-      rescue Exception
+      rescue
+        # Transactions aren't supported
+      end
+
+      def begin_isolated_db_transaction(isolation)
+        execute "SET TRANSACTION ISOLATION LEVEL #{transaction_isolation_levels.fetch(isolation)}"
+        begin_db_transaction
+      rescue
         # Transactions aren't supported
       end
 
       def commit_db_transaction #:nodoc:
         execute "COMMIT"
-      rescue Exception
+      rescue
         # Transactions aren't supported
       end
 
       def rollback_db_transaction #:nodoc:
         execute "ROLLBACK"
-      rescue Exception
+      rescue
         # Transactions aren't supported
       end
 
@@ -281,23 +316,18 @@ module ActiveRecord
 
       # In the simple case, MySQL allows us to place JOINs directly into the UPDATE
       # query. However, this does not allow for LIMIT, OFFSET and ORDER. To support
-      # these, we must use a subquery. However, MySQL is too stupid to create a
-      # temporary table for this automatically, so we have to give it some prompting
-      # in the form of a subsubquery. Ugh!
+      # these, we must use a subquery.
       def join_to_update(update, select) #:nodoc:
         if select.limit || select.offset || select.orders.any?
-          subsubselect = select.clone
-          subsubselect.projections = [update.key]
-
-          subselect = Arel::SelectManager.new(select.engine)
-          subselect.project Arel.sql(update.key.name)
-          subselect.from subsubselect.as('__active_record_temp')
-
-          update.where update.key.in(subselect)
+          super
         else
           update.table select.source
           update.wheres = select.constraints
         end
+      end
+
+      def empty_insert_statement_value
+        "VALUES ()"
       end
 
       # SCHEMA STATEMENTS ========================================
@@ -309,11 +339,11 @@ module ActiveRecord
           sql = "SHOW TABLES"
         end
 
-        select_all(sql).map do |table|
+        select_all(sql, 'SCHEMA').map { |table|
           table.delete('Table_type')
           sql = "SHOW CREATE TABLE #{quote_table_name(table.to_a.first.last)}"
-          exec_without_stmt(sql).first['Create Table'] + ";\n\n"
-        end.join("")
+          exec_query(sql, 'SCHEMA').first['Create Table'] + ";\n\n"
+        }.join
       end
 
       # Drops the database specified on the +name+ attribute
@@ -327,9 +357,9 @@ module ActiveRecord
       # Charset defaults to utf8.
       #
       # Example:
-      #   create_database 'charset_test', :charset => 'latin1', :collation => 'latin1_bin'
+      #   create_database 'charset_test', charset: 'latin1', collation: 'latin1_bin'
       #   create_database 'matt_development'
-      #   create_database 'matt_development', :charset => :big5
+      #   create_database 'matt_development', charset: :big5
       def create_database(name, options = {})
         if options[:collation]
           execute "CREATE DATABASE `#{name}` DEFAULT CHARACTER SET `#{options[:charset] || 'utf8'}` COLLATE `#{options[:collation]}`"
@@ -360,8 +390,10 @@ module ActiveRecord
         show_variable 'collation_database'
       end
 
-      def tables(name = nil, database = nil) #:nodoc:
-        sql = ["SHOW TABLES", database].compact.join(' IN ')
+      def tables(name = nil, database = nil, like = nil) #:nodoc:
+        sql = "SHOW TABLES "
+        sql << "IN #{quote_table_name(database)} " if database
+        sql << "LIKE #{quote(like)}" if like
 
         execute_and_free(sql, 'SCHEMA') do |result|
           result.collect { |field| field.first }
@@ -369,7 +401,8 @@ module ActiveRecord
       end
 
       def table_exists?(name)
-        return true if super
+        return false unless name
+        return true if tables(nil, nil, name).any?
 
         name          = name.to_s
         schema, table = name.split('.', 2)
@@ -379,7 +412,7 @@ module ActiveRecord
           schema = nil
         end
 
-        tables(nil, schema).include? table
+        tables(nil, schema, table).any?
       end
 
       # Returns an array of indexes for the given table.
@@ -403,7 +436,7 @@ module ActiveRecord
       end
 
       # Returns an array of +Column+ objects for the table specified by +table_name+.
-      def columns(table_name, name = nil)#:nodoc:
+      def columns(table_name)#:nodoc:
         sql = "SHOW FULL FIELDS FROM #{quote_table_name(table_name)}"
         execute_and_free(sql, 'SCHEMA') do |result|
           each_hash(result).map do |field|
@@ -421,7 +454,7 @@ module ActiveRecord
           table, arguments = args.shift, args
           method = :"#{command}_sql"
 
-          if respond_to?(method)
+          if respond_to?(method, true)
             send(method, table, *arguments)
           else
             raise "Unknown method called : #{method}(#{arguments.inspect})"
@@ -468,15 +501,33 @@ module ActiveRecord
 
       # Maps logical Rails types to MySQL-specific data types.
       def type_to_sql(type, limit = nil, precision = nil, scale = nil)
-        return super unless type.to_s == 'integer'
-
-        case limit
-        when 1; 'tinyint'
-        when 2; 'smallint'
-        when 3; 'mediumint'
-        when nil, 4, 11; 'int(11)'  # compatibility with MySQL default
-        when 5..8; 'bigint'
-        else raise(ActiveRecordError, "No integer type has byte size #{limit}")
+        case type.to_s
+        when 'binary'
+          case limit
+          when 0..0xfff;           "varbinary(#{limit})"
+          when nil;                "blob"
+          when 0x1000..0xffffffff; "blob(#{limit})"
+          else raise(ActiveRecordError, "No binary type has character length #{limit}")
+          end
+        when 'integer'
+          case limit
+          when 1; 'tinyint'
+          when 2; 'smallint'
+          when 3; 'mediumint'
+          when nil, 4, 11; 'int(11)'  # compatibility with MySQL default
+          when 5..8; 'bigint'
+          else raise(ActiveRecordError, "No integer type has byte size #{limit}")
+          end
+        when 'text'
+          case limit
+          when 0..0xff;               'tinytext'
+          when nil, 0x100..0xffff;    'text'
+          when 0x10000..0xffffff;     'mediumtext'
+          when 0x1000000..0xffffffff; 'longtext'
+          else raise(ActiveRecordError, "No text type has character length #{limit}")
+          end
+        else
+          super
         end
       end
 
@@ -490,15 +541,20 @@ module ActiveRecord
 
       # SHOW VARIABLES LIKE 'name'
       def show_variable(name)
-        variables = select_all("SHOW VARIABLES LIKE '#{name}'")
+        variables = select_all("SHOW VARIABLES LIKE '#{name}'", 'SCHEMA')
         variables.first['Value'] unless variables.empty?
       end
 
       # Returns a table's primary key and belonging sequence.
       def pk_and_sequence_for(table)
-        execute_and_free("DESCRIBE #{quote_table_name(table)}", 'SCHEMA') do |result|
-          keys = each_hash(result).select { |row| row[:Key] == 'PRI' }.map { |row| row[:Field] }
-          keys.length == 1 ? [keys.first, nil] : nil
+        execute_and_free("SHOW CREATE TABLE #{quote_table_name(table)}", 'SCHEMA') do |result|
+          create_table = each_hash(result).first[:"Create Table"]
+          if create_table.to_s =~ /PRIMARY KEY\s+(?:USING\s+\w+\s+)?\((.+)\)/
+            keys = $1.split(",").map { |key| key.delete('`"') }
+            keys.length == 1 ? [keys.first, nil] : nil
+          else
+            nil
+          end
         end
       end
 
@@ -524,19 +580,46 @@ module ActiveRecord
         where_sql
       end
 
+      def strict_mode?
+        @config.fetch(:strict, true)
+      end
+
       protected
 
-      def quoted_columns_for_index(column_names, options = {})
-        length = options[:length] if options.is_a?(Hash)
+      # MySQL is too stupid to create a temporary table for use subquery, so we have
+      # to give it some prompting in the form of a subsubquery. Ugh!
+      def subquery_for(key, select)
+        subsubselect = select.clone
+        subsubselect.projections = [key]
 
-        case length
-        when Hash
-          column_names.map {|name| length[name] ? "#{quote_column_name(name)}(#{length[name]})" : quote_column_name(name) }
-        when Fixnum
-          column_names.map {|name| "#{quote_column_name(name)}(#{length})"}
-        else
-          column_names.map {|name| quote_column_name(name) }
+        subselect = Arel::SelectManager.new(select.engine)
+        subselect.project Arel.sql(key.name)
+        subselect.from subsubselect.as('__active_record_temp')
+      end
+
+      def add_index_length(option_strings, column_names, options = {})
+        if options.is_a?(Hash) && length = options[:length]
+          case length
+          when Hash
+            column_names.each {|name| option_strings[name] += "(#{length[name]})" if length.has_key?(name) && length[name].present?}
+          when Fixnum
+            column_names.each {|name| option_strings[name] += "(#{length})"}
+          end
         end
+
+        return option_strings
+      end
+
+      def quoted_columns_for_index(column_names, options = {})
+        option_strings = Hash[column_names.map {|name| [name, '']}]
+
+        # add index length
+        option_strings = add_index_length(option_strings, column_names, options)
+
+        # add index sort order
+        option_strings = add_index_sort_order(option_strings, column_names, options)
+
+        column_names.map {|name| quote_column_name(name) + option_strings[name]}
       end
 
       def translate_exception(exception, message)
@@ -584,16 +667,19 @@ module ActiveRecord
           raise ActiveRecordError, "No such column: #{table_name}.#{column_name}"
         end
 
-        current_type = select_one("SHOW COLUMNS FROM #{quote_table_name(table_name)} LIKE '#{column_name}'")["Type"]
+        current_type = select_one("SHOW COLUMNS FROM #{quote_table_name(table_name)} LIKE '#{column_name}'", 'SCHEMA')["Type"]
         rename_column_sql = "CHANGE #{quote_column_name(column_name)} #{quote_column_name(new_column_name)} #{current_type}"
         add_column_options!(rename_column_sql, options)
         rename_column_sql
       end
 
-      def remove_column_sql(table_name, *column_names)
-        columns_for_remove(table_name, *column_names).map {|column_name| "DROP #{column_name}" }
+      def remove_column_sql(table_name, column_name, type = nil, options = {})
+        "DROP #{quote_column_name(column_name)}"
       end
-      alias :remove_columns_sql :remove_column
+
+      def remove_columns_sql(table_name, *column_names)
+        column_names.map {|column_name| remove_column_sql(table_name, column_name) }
+      end
 
       def add_index_sql(table_name, column_name, options = {})
         index_name, index_type, index_columns = add_index_options(table_name, column_name, options)
@@ -625,6 +711,45 @@ module ActiveRecord
         end
         column
       end
+
+      def configure_connection
+        variables = @config[:variables] || {}
+
+        # By default, MySQL 'where id is null' selects the last inserted id.
+        # Turn this off. http://dev.rubyonrails.org/ticket/6778
+        variables[:sql_auto_is_null] = 0
+
+        # Increase timeout so the server doesn't disconnect us.
+        wait_timeout = @config[:wait_timeout]
+        wait_timeout = 2147483 unless wait_timeout.is_a?(Fixnum)
+        variables[:wait_timeout] = wait_timeout
+
+        # Make MySQL reject illegal values rather than truncating or blanking them, see
+        # http://dev.mysql.com/doc/refman/5.0/en/server-sql-mode.html#sqlmode_strict_all_tables
+        # If the user has provided another value for sql_mode, don't replace it.
+        if strict_mode? && !variables.has_key?(:sql_mode)
+          variables[:sql_mode] = 'STRICT_ALL_TABLES'
+        end
+
+        # NAMES does not have an equals sign, see
+        # http://dev.mysql.com/doc/refman/5.0/en/set-statement.html#id944430
+        # (trailing comma because variable_assignments will always have content)
+        encoding = "NAMES #{@config[:encoding]}, " if @config[:encoding]
+
+        # Gather up all of the SET variables...
+        variable_assignments = variables.map do |k, v|
+          if v == ':default' || v == :default
+            "@@SESSION.#{k.to_s} = DEFAULT" # Sets the value to the global or compile default
+          elsif !v.nil?
+            "@@SESSION.#{k.to_s} = #{quote(v)}"
+          end
+          # or else nil; compact to clear nils out
+        end.compact.join(', ')
+
+        # ...and send them all in one query
+        execute("SET #{encoding} #{variable_assignments}", :skip_logging)
+      end
+
     end
   end
 end

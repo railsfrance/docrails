@@ -1,7 +1,4 @@
-# 1.9 ships with Fibers but we need to require the extra
-# methods explicitly. We only load those extra methods if
-# Fiber is available in the first place.
-require 'fiber' if defined?(Fiber)
+require 'fiber'
 
 module ActionView
   # == TODO
@@ -33,7 +30,7 @@ module ActionView
       # This is the same logging logic as in ShowExceptions middleware.
       # TODO Once "exceptron" is in, refactor this piece to simply re-use exceptron.
       def log_error(exception) #:nodoc:
-        logger = ActionController::Base.logger
+        logger = ActionView::Base.logger
         return unless logger
 
         message = "\n#{exception.class} (#{exception.message}):\n"

@@ -4,8 +4,7 @@ class Hash
 
   # Returns an <tt>ActiveSupport::HashWithIndifferentAccess</tt> out of its receiver:
   #
-  #   {:a => 1}.with_indifferent_access["a"] # => 1
-  #
+  #   { a: 1 }.with_indifferent_access['a'] # => 1
   def with_indifferent_access
     ActiveSupport::HashWithIndifferentAccess.new_from_hash_copying_default(self)
   end
@@ -14,11 +13,10 @@ class Hash
   # #with_indifferent_access. This method will be called on the current object
   # by the enclosing object and is aliased to #with_indifferent_access by
   # default. Subclasses of Hash may overwrite this method to return +self+ if
-  # converting to an +ActiveSupport::HashWithIndifferentAccess+ would not be
+  # converting to an <tt>ActiveSupport::HashWithIndifferentAccess</tt> would not be
   # desirable.
   #
-  #   b = {:b => 1}
-  #   {:a => b}.with_indifferent_access["a"] # calls b.nested_under_indifferent_access
-  #
+  #   b = { b: 1 }
+  #   { a: b }.with_indifferent_access['a'] # calls b.nested_under_indifferent_access
   alias nested_under_indifferent_access with_indifferent_access
 end

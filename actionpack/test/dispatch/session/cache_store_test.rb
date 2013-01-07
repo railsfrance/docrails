@@ -1,4 +1,5 @@
 require 'abstract_unit'
+require 'fixtures/session_autoload_test/session_autoload_test/foo'
 
 class CacheStoreTest < ActionDispatch::IntegrationTest
   class TestController < ActionController::Base
@@ -30,8 +31,6 @@ class CacheStoreTest < ActionDispatch::IntegrationTest
       session[:bar] = "baz"
       head :ok
     end
-
-    def rescue_action(e) raise end
   end
 
   def test_setting_and_getting_session_value
@@ -166,7 +165,7 @@ class CacheStoreTest < ActionDispatch::IntegrationTest
     def with_test_route_set
       with_routing do |set|
         set.draw do
-          match ':action', :to => ::CacheStoreTest::TestController
+          get ':action', :to => ::CacheStoreTest::TestController
         end
 
         @app = self.class.build_app(set) do |middleware|

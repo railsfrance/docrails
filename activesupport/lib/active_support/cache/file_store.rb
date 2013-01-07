@@ -1,19 +1,20 @@
+require 'active_support/core_ext/marshal'
 require 'active_support/core_ext/file/atomic'
 require 'active_support/core_ext/string/conversions'
-require 'active_support/core_ext/object/inclusion'
-require 'rack/utils'
+require 'uri/common'
 
 module ActiveSupport
   module Cache
     # A cache store implementation which stores everything on the filesystem.
     #
     # FileStore implements the Strategy::LocalCache strategy which implements
-    # an in memory cache inside of a block.
+    # an in-memory cache inside of a block.
     class FileStore < Store
       attr_reader :cache_path
 
       DIR_FORMATTER = "%03X"
-      FILENAME_MAX_SIZE = 230 # max filename size on file system is 255, minus room for timestamp and random characters appended by Tempfile (used by atomic write)
+      FILENAME_MAX_SIZE = 228 # max filename size on file system is 255, minus room for timestamp and random characters appended by Tempfile (used by atomic write)
+      EXCLUDED_DIRS = ['.', '..'].freeze
 
       def initialize(cache_path, options = nil)
         super(options)
@@ -22,30 +23,15 @@ module ActiveSupport
       end
 
       def clear(options = nil)
-        root_dirs = Dir.entries(cache_path).reject{|f| f.in?(['.', '..'])}
+        root_dirs = Dir.entries(cache_path).reject {|f| (EXCLUDED_DIRS + [".gitkeep"]).include?(f)}
         FileUtils.rm_r(root_dirs.collect{|f| File.join(cache_path, f)})
       end
 
-      # Cleanup the cache by removing old entries. By default this will delete entries
-      # that haven't been accessed in one day. You can change this behavior by passing
-      # in a +not_accessed_in+ option. Any entry not accessed in that number of seconds
-      # in the past will be deleted. Alternatively, you can pass in +:expired_only+ with
-      # +true+ to only delete expired entries.
       def cleanup(options = nil)
         options = merged_options(options)
-        expired_only = options[:expired_only]
-        timestamp = Time.now - (options[:not_accessed_in] || 1.day.to_i)
-        search_dir(cache_path) do |fname|
-          if expired_only
-            key = file_path_key(fname)
-            entry = read_entry(key, options)
-            delete_entry(key, options) if entry && entry.expired?
-          else
-            if File.atime(fname) <= timestamp
-              key = file_path_key(fname)
-              delete_entry(key, options)
-            end
-          end
+        each_key(options) do |key|
+          entry = read_entry(key, options)
+          delete_entry(key, options) if entry && entry.expired?
         end
       end
 
@@ -95,7 +81,8 @@ module ActiveSupport
           if File.exist?(file_name)
             File.open(file_name) { |f| Marshal.load(f) }
           end
-        rescue
+        rescue => e
+          logger.error("FileStoreError (#{e}): #{e.message}") if logger
           nil
         end
 
@@ -140,7 +127,7 @@ module ActiveSupport
 
         # Translate a key into a file path.
         def key_file_path(key)
-          fname = Rack::Utils.escape(key)
+          fname = URI.encode_www_form_component(key)
           hash = Zlib.adler32(fname)
           hash, dir_1 = hash.divmod(0x1000)
           dir_2 = hash.modulo(0x1000)
@@ -157,14 +144,14 @@ module ActiveSupport
 
         # Translate a file path into a key.
         def file_path_key(path)
-          fname = path[cache_path.size, path.size].split(File::SEPARATOR, 4).last
-          Rack::Utils.unescape(fname)
+          fname = path[cache_path.to_s.size..-1].split(File::SEPARATOR, 4).last
+          URI.decode_www_form_component(fname, Encoding::UTF_8)
         end
 
         # Delete empty directories in the cache.
         def delete_empty_directories(dir)
           return if dir == cache_path
-          if Dir.entries(dir).reject{|f| f.in?(['.', '..'])}.empty?
+          if Dir.entries(dir).reject {|f| EXCLUDED_DIRS.include?(f)}.empty?
             File.delete(dir) rescue nil
             delete_empty_directories(File.dirname(dir))
           end
@@ -178,7 +165,7 @@ module ActiveSupport
         def search_dir(dir, &callback)
           return if !File.exist?(dir)
           Dir.foreach(dir) do |d|
-            next if d == "." || d == ".."
+            next if EXCLUDED_DIRS.include?(d)
             name = File.join(dir, d)
             if File.directory?(name)
               search_dir(name, &callback)

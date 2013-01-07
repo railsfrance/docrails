@@ -3,7 +3,7 @@ require 'active_support/xml_mini'
 require 'active_support/builder'
 
 module XmlMiniTest
-  class RenameKeyTest < Test::Unit::TestCase
+  class RenameKeyTest < ActiveSupport::TestCase
     def test_rename_key_dasherizes_by_default
       assert_equal "my-key", ActiveSupport::XmlMini.rename_key("my_key")
     end
@@ -98,5 +98,67 @@ module XmlMiniTest
       assert_xml "<New---York type=\"integer\">33</New---York>"
     end
     # TODO: test the remaining functions hidden in #to_tag.
+  end
+
+  class WithBackendTest < ActiveSupport::TestCase
+    module REXML end
+    module LibXML end
+    module Nokogiri end
+
+    setup do
+      @xml = ActiveSupport::XmlMini
+    end
+
+    test "#with_backend should switch backend and then switch back" do
+      @xml.backend = REXML
+      @xml.with_backend(LibXML) do
+        assert_equal LibXML, @xml.backend
+        @xml.with_backend(Nokogiri) do
+          assert_equal Nokogiri, @xml.backend
+        end
+        assert_equal LibXML, @xml.backend
+      end
+      assert_equal REXML, @xml.backend
+    end
+
+    test "backend switch inside #with_backend block" do
+      @xml.with_backend(LibXML) do
+        @xml.backend = REXML
+        assert_equal REXML, @xml.backend
+      end
+      assert_equal REXML, @xml.backend
+    end
+  end
+
+  class ThreadSafetyTest < ActiveSupport::TestCase
+    module REXML end
+    module LibXML end
+
+    setup do
+      @xml = ActiveSupport::XmlMini
+    end
+
+    test "#with_backend should be thread-safe" do
+      @xml.backend = REXML
+      t = Thread.new do
+        @xml.with_backend(LibXML) { sleep 1 }
+      end
+      sleep 0.1 while t.status != "sleep"
+
+      # We should get `old_backend` here even while another
+      # thread is using `new_backend`.
+      assert_equal REXML, @xml.backend
+    end
+
+    test "nested #with_backend should be thread-safe" do
+      @xml.with_backend(REXML) do
+        t = Thread.new do
+          @xml.with_backend(LibXML) { sleep 1 }
+        end
+        sleep 0.1 while t.status != "sleep"
+
+        assert_equal REXML, @xml.backend
+      end
+    end
   end
 end

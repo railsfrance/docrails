@@ -11,6 +11,8 @@ require 'active_support/xml_mini'
 
 class ValidationsTest < ActiveModel::TestCase
 
+  class CustomStrictValidationException < StandardError; end
+
   def setup
     Topic._validators.clear
   end
@@ -58,8 +60,7 @@ class ValidationsTest < ActiveModel::TestCase
     r = Reply.new
     r.valid?
 
-    errors = []
-    r.errors.each {|attr, messages| errors << [attr.to_s, messages] }
+    errors = r.errors.collect {|attr, messages| [attr.to_s, messages]}
 
     assert errors.include?(["title", "is Empty"])
     assert errors.include?(["content", "is Empty"])
@@ -181,7 +182,7 @@ class ValidationsTest < ActiveModel::TestCase
     assert_match %r{<error>Title can't be blank</error>}, xml
     assert_match %r{<error>Content can't be blank</error>}, xml
 
-    hash = ActiveSupport::OrderedHash.new
+    hash = {}
     hash[:title] = ["can't be blank"]
     hash[:content] = ["can't be blank"]
     assert_equal t.errors.to_json, hash.to_json
@@ -311,7 +312,7 @@ class ValidationsTest < ActiveModel::TestCase
   end
 
   def test_strict_validation_particular_validator
-    Topic.validates :title,  :presence => {:strict => true}
+    Topic.validates :title,  :presence => { :strict => true }
     assert_raises ActiveModel::StrictValidationFailed do
       Topic.new.valid?
     end
@@ -324,10 +325,52 @@ class ValidationsTest < ActiveModel::TestCase
     end
   end
 
+  def test_strict_validation_custom_exception
+    Topic.validates_presence_of :title, :strict => CustomStrictValidationException
+    assert_raises CustomStrictValidationException do
+      Topic.new.valid?
+    end
+  end
+
   def test_validates_with_bang
     Topic.validates! :title,  :presence => true
     assert_raises ActiveModel::StrictValidationFailed do
       Topic.new.valid?
     end
+  end
+
+  def test_validates_with_false_hash_value
+    Topic.validates :title,  :presence => false
+    assert Topic.new.valid?
+  end
+
+  def test_strict_validation_error_message
+    Topic.validates :title, :strict => true, :presence => true
+
+    exception = assert_raises(ActiveModel::StrictValidationFailed) do
+      Topic.new.valid?
+    end
+    assert_equal "Title can't be blank", exception.message
+  end
+
+  def test_does_not_modify_options_argument
+    options = { :presence => true }
+    Topic.validates :title, options
+    assert_equal({ :presence => true }, options)
+  end
+
+  def test_dup_validity_is_independent
+    Topic.validates_presence_of :title
+    topic = Topic.new("title" => "Litterature")
+    topic.valid?
+
+    duped = topic.dup
+    duped.title = nil
+    assert duped.invalid?
+
+    topic.title = nil
+    duped.title = 'Mathematics'
+    assert topic.invalid?
+    assert duped.valid?
   end
 end

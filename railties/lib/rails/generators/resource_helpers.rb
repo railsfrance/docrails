@@ -4,16 +4,14 @@ module Rails
   module Generators
     # Deal with controller names on scaffold and add some helpers to deal with
     # ActiveModel.
-    #
-    module ResourceHelpers
+    module ResourceHelpers # :nodoc:
       mattr_accessor :skip_warn
 
       def self.included(base) #:nodoc:
-        base.class_option :force_plural, :type => :boolean, :desc => "Forces the use of a plural ModelName"
+        base.class_option :force_plural, type: :boolean, desc: "Forces the use of a plural ModelName"
       end
 
       # Set controller variables on initialization.
-      #
       def initialize(*args) #:nodoc:
         super
 
@@ -50,7 +48,7 @@ module Rails
         end
 
         def controller_i18n_scope
-          @controller_i18n_scope ||= controller_file_path.gsub('/', '.')
+          @controller_i18n_scope ||= controller_file_path.tr('/', '.')
         end
 
         # Loads the ORM::Generators::ActiveModel class. This class is responsible
@@ -64,7 +62,7 @@ module Rails
             end
 
             begin
-              "#{options[:orm].to_s.classify}::Generators::ActiveModel".constantize
+              "#{options[:orm].to_s.camelize}::Generators::ActiveModel".constantize
             rescue NameError
               Rails::Generators::ActiveModel
             end
@@ -73,7 +71,7 @@ module Rails
 
         # Initialize ORM::Generators::ActiveModel to access instance methods.
         def orm_instance(name=singular_table_name)
-          @orm_instance ||= @orm_class.new(name)
+          @orm_instance ||= orm_class.new(name)
         end
     end
   end

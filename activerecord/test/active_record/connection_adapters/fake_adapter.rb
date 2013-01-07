@@ -1,6 +1,6 @@
 module ActiveRecord
-  class Base
-    def self.fake_connection(config)
+  module ConnectionHandling
+    def fake_connection(config)
       ConnectionAdapters::FakeAdapter.new nil, logger
     end
   end
@@ -9,11 +9,16 @@ module ActiveRecord
     class FakeAdapter < AbstractAdapter
       attr_accessor :tables, :primary_keys
 
+      @columns = Hash.new { |h,k| h[k] = [] }
+      class << self
+        attr_reader :columns
+      end
+
       def initialize(connection, logger)
         super
         @tables       = []
         @primary_keys = {}
-        @columns      = Hash.new { |h,k| h[k] = [] }
+        @columns      = self.class.columns
       end
 
       def primary_key(table)
@@ -28,8 +33,12 @@ module ActiveRecord
           options[:null])
       end
 
-      def columns(table_name, message)
+      def columns(table_name)
         @columns[table_name]
+      end
+
+      def active?
+        true
       end
     end
   end

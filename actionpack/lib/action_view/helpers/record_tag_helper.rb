@@ -1,15 +1,13 @@
-require 'action_controller/record_identifier'
-
 module ActionView
   # = Action View Record Tag Helpers
   module Helpers
     module RecordTagHelper
-      include ActionController::RecordIdentifier
+      include ActionView::RecordIdentifier
 
       # Produces a wrapper DIV element with id and class parameters that
       # relate to the specified Active Record object. Usage example:
       #
-      #    <%= div_for(@person, :class => "foo") do %>
+      #    <%= div_for(@person, class: "foo") do %>
       #       <%= @person.name %>
       #    <% end %>
       #
@@ -21,7 +19,7 @@ module ActionView
       # get iterated over and yield each record as an argument for the block.
       # For example:
       #
-      #    <%= div_for(@people, :class => "foo") do |person| %>
+      #    <%= div_for(@people, class: "foo") do |person| %>
       #      <%= person.name %>
       #    <% end %>
       #
@@ -74,20 +72,18 @@ module ActionView
       # additional HTML attributes. If you specify a <tt>:class</tt> value, it will be combined
       # with the default class name for your object. For example:
       #
-      #    <%= content_tag_for(:li, @person, :class => "bar") %>...
+      #    <%= content_tag_for(:li, @person, class: "bar") %>...
       #
       # produces:
       #
       #    <li id="person_123" class="person bar">...
       #
       def content_tag_for(tag_name, single_or_multiple_records, prefix = nil, options = nil, &block)
-        if single_or_multiple_records.respond_to?(:to_ary)
-          single_or_multiple_records.to_ary.map do |single_record|
-            capture { content_tag_for_single_record(tag_name, single_record, prefix, options, &block) }
-          end.join("\n").html_safe
-        else
-          content_tag_for_single_record(tag_name, single_or_multiple_records, prefix, options, &block)
-        end
+        options, prefix = prefix, nil if prefix.is_a?(Hash)
+
+        Array(single_or_multiple_records).map do |single_record|
+          content_tag_for_single_record(tag_name, single_record, prefix, options, &block)
+        end.join("\n").html_safe
       end
 
       private
@@ -95,14 +91,11 @@ module ActionView
         # Called by <tt>content_tag_for</tt> internally to render a content tag
         # for each record.
         def content_tag_for_single_record(tag_name, record, prefix, options, &block)
-          options, prefix = prefix, nil if prefix.is_a?(Hash)
-          options ||= {}
-          options.merge!({ :class => "#{dom_class(record, prefix)} #{options[:class]}".strip, :id => dom_id(record, prefix) })
-          if block.arity == 0
-            content_tag(tag_name, capture(&block), options)
-          else
-            content_tag(tag_name, capture(record, &block), options)
-          end
+          options = options ? options.dup : {}
+          options[:class] = "#{dom_class(record, prefix)} #{options[:class]}".rstrip
+          options[:id]    = dom_id(record, prefix)
+
+          content_tag(tag_name, capture(record, &block), options)
         end
     end
   end

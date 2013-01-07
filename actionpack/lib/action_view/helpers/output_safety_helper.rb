@@ -11,7 +11,8 @@ module ActionView #:nodoc:
       #
       # For example:
       #
-      # <%=raw @user.name %>
+      #  raw @user.name
+      #  # => 'Jimmy <alert>Tables</alert>'
       def raw(stringish)
         stringish.to_s.html_safe
       end
@@ -28,7 +29,6 @@ module ActionView #:nodoc:
       #   # => "<p>foo</p><br /><p>bar</p>"
       #
       def safe_join(array, sep=$,)
-        sep ||= "".html_safe
         sep = ERB::Util.html_escape(sep)
 
         array.map { |i| ERB::Util.html_escape(i) }.join(sep).html_safe

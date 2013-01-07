@@ -1,7 +1,7 @@
 require "isolation/abstract_unit"
 
 module ApplicationTests
-  class I18nTest < Test::Unit::TestCase
+  class I18nTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
@@ -85,7 +85,7 @@ en:
 
       app_file 'config/routes.rb', <<-RUBY
         AppTemplate::Application.routes.draw do
-          match '/i18n',   :to => lambda { |env| [200, {}, [Foo.instance_variable_get('@foo')]] }
+          get '/i18n',   :to => lambda { |env| [200, {}, [Foo.instance_variable_get('@foo')]] }
         end
       RUBY
 
@@ -109,7 +109,7 @@ en:
 
       app_file 'config/routes.rb', <<-RUBY
         AppTemplate::Application.routes.draw do
-          match '/i18n',   :to => lambda { |env| [200, {}, [I18n.t(:foo)]] }
+          get '/i18n',   :to => lambda { |env| [200, {}, [I18n.t(:foo)]] }
         end
       RUBY
 
@@ -119,6 +119,9 @@ en:
 
       get "/i18n"
       assert_equal "1", last_response.body
+
+      # Wait a full second so we have time for changes to propagate
+      sleep(1)
 
       app_file "config/locales/en.yml", <<-YAML
 en:
@@ -140,7 +143,7 @@ en:
       I18n::Railtie.config.i18n.fallbacks = true
       load_app
       assert I18n.backend.class.included_modules.include?(I18n::Backend::Fallbacks)
-      assert_fallbacks :de => [:de, :en]
+      assert_fallbacks de: [:de, :en]
     end
 
     test "config.i18n.fallbacks = true initializes I18n.fallbacks with default settings even when backend changes" do
@@ -148,37 +151,37 @@ en:
       I18n::Railtie.config.i18n.backend = Class.new(I18n::Backend::Simple).new
       load_app
       assert I18n.backend.class.included_modules.include?(I18n::Backend::Fallbacks)
-      assert_fallbacks :de => [:de, :en]
+      assert_fallbacks de: [:de, :en]
     end
 
     test "config.i18n.fallbacks.defaults = [:'en-US'] initializes fallbacks with en-US as a fallback default" do
       I18n::Railtie.config.i18n.fallbacks.defaults = [:'en-US']
       load_app
-      assert_fallbacks :de => [:de, :'en-US', :en]
+      assert_fallbacks de: [:de, :'en-US', :en]
     end
 
     test "config.i18n.fallbacks.map = { :ca => :'es-ES' } initializes fallbacks with a mapping ca => es-ES" do
       I18n::Railtie.config.i18n.fallbacks.map = { :ca => :'es-ES' }
       load_app
-      assert_fallbacks :ca => [:ca, :"es-ES", :es, :en]
+      assert_fallbacks ca: [:ca, :"es-ES", :es, :en]
     end
 
     test "[shortcut] config.i18n.fallbacks = [:'en-US'] initializes fallbacks with en-US as a fallback default" do
       I18n::Railtie.config.i18n.fallbacks = [:'en-US']
       load_app
-      assert_fallbacks :de => [:de, :'en-US', :en]
+      assert_fallbacks de: [:de, :'en-US', :en]
     end
 
     test "[shortcut] config.i18n.fallbacks = [{ :ca => :'es-ES' }] initializes fallbacks with a mapping de-AT => de-DE" do
       I18n::Railtie.config.i18n.fallbacks.map = { :ca => :'es-ES' }
       load_app
-      assert_fallbacks :ca => [:ca, :"es-ES", :es, :en]
+      assert_fallbacks ca: [:ca, :"es-ES", :es, :en]
     end
 
     test "[shortcut] config.i18n.fallbacks = [:'en-US', { :ca => :'es-ES' }] initializes fallbacks with the given arguments" do
       I18n::Railtie.config.i18n.fallbacks = [:'en-US', { :ca => :'es-ES' }]
       load_app
-      assert_fallbacks :ca => [:ca, :"es-ES", :es, :'en-US', :en]
+      assert_fallbacks ca: [:ca, :"es-ES", :es, :'en-US', :en]
     end
   end
 end

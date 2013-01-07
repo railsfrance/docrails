@@ -260,74 +260,64 @@ class LengthValidationTest < ActiveModel::TestCase
   end
 
   def test_validates_length_of_using_minimum_utf8
-    with_kcode('UTF8') do
-      Topic.validates_length_of :title, :minimum => 5
+    Topic.validates_length_of :title, :minimum => 5
 
-      t = Topic.new("title" => "一二三四五", "content" => "whatever")
-      assert t.valid?
+    t = Topic.new("title" => "一二三四五", "content" => "whatever")
+    assert t.valid?
 
-      t.title = "一二三四"
-      assert t.invalid?
-      assert t.errors[:title].any?
-      assert_equal ["is too short (minimum is 5 characters)"], t.errors["title"]
-    end
+    t.title = "一二三四"
+    assert t.invalid?
+    assert t.errors[:title].any?
+    assert_equal ["is too short (minimum is 5 characters)"], t.errors["title"]
   end
 
   def test_validates_length_of_using_maximum_utf8
-    with_kcode('UTF8') do
-      Topic.validates_length_of :title, :maximum => 5
+    Topic.validates_length_of :title, :maximum => 5
 
-      t = Topic.new("title" => "一二三四五", "content" => "whatever")
-      assert t.valid?
+    t = Topic.new("title" => "一二三四五", "content" => "whatever")
+    assert t.valid?
 
-      t.title = "一二34五六"
-      assert t.invalid?
-      assert t.errors[:title].any?
-      assert_equal ["is too long (maximum is 5 characters)"], t.errors["title"]
-    end
+    t.title = "一二34五六"
+    assert t.invalid?
+    assert t.errors[:title].any?
+    assert_equal ["is too long (maximum is 5 characters)"], t.errors["title"]
   end
 
   def test_validates_length_of_using_within_utf8
-    with_kcode('UTF8') do
-      Topic.validates_length_of(:title, :content, :within => 3..5)
+    Topic.validates_length_of(:title, :content, :within => 3..5)
 
-      t = Topic.new("title" => "一二", "content" => "12三四五六七")
-      assert t.invalid?
-      assert_equal ["is too short (minimum is 3 characters)"], t.errors[:title]
-      assert_equal ["is too long (maximum is 5 characters)"], t.errors[:content]
-      t.title = "一二三"
-      t.content  = "12三"
-      assert t.valid?
-    end
+    t = Topic.new("title" => "一二", "content" => "12三四五六七")
+    assert t.invalid?
+    assert_equal ["is too short (minimum is 3 characters)"], t.errors[:title]
+    assert_equal ["is too long (maximum is 5 characters)"], t.errors[:content]
+    t.title = "一二三"
+    t.content  = "12三"
+    assert t.valid?
   end
 
   def test_optionally_validates_length_of_using_within_utf8
-    with_kcode('UTF8') do
-      Topic.validates_length_of :title, :within => 3..5, :allow_nil => true
+    Topic.validates_length_of :title, :within => 3..5, :allow_nil => true
 
-      t = Topic.new(:title => "一二三四五")
-      assert t.valid?, t.errors.inspect
+    t = Topic.new(:title => "一二三四五")
+    assert t.valid?, t.errors.inspect
 
-      t = Topic.new(:title => "一二三")
-      assert t.valid?, t.errors.inspect
+    t = Topic.new(:title => "一二三")
+    assert t.valid?, t.errors.inspect
 
-      t.title = nil
-      assert t.valid?, t.errors.inspect
-    end
+    t.title = nil
+    assert t.valid?, t.errors.inspect
   end
 
   def test_validates_length_of_using_is_utf8
-    with_kcode('UTF8') do
-      Topic.validates_length_of :title, :is => 5
+    Topic.validates_length_of :title, :is => 5
 
-      t = Topic.new("title" => "一二345", "content" => "whatever")
-      assert t.valid?
+    t = Topic.new("title" => "一二345", "content" => "whatever")
+    assert t.valid?
 
-      t.title = "一二345六"
-      assert t.invalid?
-      assert t.errors[:title].any?
-      assert_equal ["is the wrong length (should be 5 characters)"], t.errors["title"]
-    end
+    t.title = "一二345六"
+    assert t.invalid?
+    assert t.errors[:title].any?
+    assert_equal ["is the wrong length (should be 5 characters)"], t.errors["title"]
   end
 
   def test_validates_length_of_with_block
@@ -366,5 +356,62 @@ class LengthValidationTest < ActiveModel::TestCase
     assert p.valid?
   ensure
     Person.reset_callbacks(:validate)
+  end
+
+  def test_validates_length_of_for_infinite_maxima
+    Topic.validates_length_of(:title, :within => 5..Float::INFINITY)
+
+    t = Topic.new("title" => "1234")
+    assert t.invalid?
+    assert t.errors[:title].any?
+
+    t.title = "12345"
+    assert t.valid?
+
+    Topic.validates_length_of(:author_name, :maximum => Float::INFINITY)
+
+    assert t.valid?
+
+    t.author_name = "A very long author name that should still be valid." * 100
+    assert t.valid?
+  end
+
+  def test_validates_length_of_using_maximum_should_not_allow_nil_when_nil_not_allowed
+    Topic.validates_length_of :title, :maximum => 10, :allow_nil => false
+    t = Topic.new
+    assert t.invalid?
+  end
+
+  def test_validates_length_of_using_maximum_should_not_allow_nil_and_empty_string_when_blank_not_allowed
+    Topic.validates_length_of :title, :maximum => 10, :allow_blank => false
+    t = Topic.new
+    assert t.invalid?
+
+    t.title = ""
+    assert t.invalid?
+  end
+
+  def test_validates_length_of_using_both_minimum_and_maximum_should_not_allow_nil
+    Topic.validates_length_of :title, :minimum => 5, :maximum => 10
+    t = Topic.new
+    assert t.invalid?
+  end
+
+  def test_validates_length_of_using_minimum_0_should_not_allow_nil
+    Topic.validates_length_of :title, :minimum => 0
+    t = Topic.new
+    assert t.invalid?
+
+    t.title = ""
+    assert t.valid?
+  end
+
+  def test_validates_length_of_using_is_0_should_not_allow_nil
+    Topic.validates_length_of :title, :is => 0
+    t = Topic.new
+    assert t.invalid?
+
+    t.title = ""
+    assert t.valid?
   end
 end

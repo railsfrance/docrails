@@ -1,23 +1,20 @@
-require 'active_support/ordered_hash'
-
-# Usually key value pairs are handled something like this:
-#
-#   h = {}
-#   h[:boy] = 'John'
-#   h[:girl] = 'Mary'
-#   h[:boy]  # => 'John'
-#   h[:girl] # => 'Mary'
-#
-# Using <tt>OrderedOptions</tt>, the above code could be reduced to:
-#
-#   h = ActiveSupport::OrderedOptions.new
-#   h.boy = 'John'
-#   h.girl = 'Mary'
-#   h.boy  # => 'John'
-#   h.girl # => 'Mary'
-#
-module ActiveSupport #:nodoc:
-  class OrderedOptions < OrderedHash
+module ActiveSupport
+  # Usually key value pairs are handled something like this:
+  #
+  #   h = {}
+  #   h[:boy] = 'John'
+  #   h[:girl] = 'Mary'
+  #   h[:boy]  # => 'John'
+  #   h[:girl] # => 'Mary'
+  #
+  # Using +OrderedOptions+, the above code could be reduced to:
+  #
+  #   h = ActiveSupport::OrderedOptions.new
+  #   h.boy = 'John'
+  #   h.girl = 'Mary'
+  #   h.boy  # => 'John'
+  #   h.girl # => 'Mary'
+  class OrderedOptions < Hash
     alias_method :_get, :[] # preserve the original #[] method
     protected :_get # make it protected
 
@@ -30,14 +27,15 @@ module ActiveSupport #:nodoc:
     end
 
     def method_missing(name, *args)
-      if name.to_s =~ /(.*)=$/
-        self[$1] = args.first
+      name_string = name.to_s
+      if name_string.chomp!('=')
+        self[name_string] = args.first
       else
         self[name]
       end
     end
 
-    def respond_to?(name)
+    def respond_to_missing?(name, include_private)
       true
     end
   end

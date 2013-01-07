@@ -1,20 +1,25 @@
 require "abstract_unit"
 require "abstract_controller/rendering"
 
-ActionView::LookupContext::DetailsKey.class_eval do
-  def self.details_keys
-    @details_keys
-  end
-end
-
 class LookupContextTest < ActiveSupport::TestCase
   def setup
     @lookup_context = ActionView::LookupContext.new(FIXTURE_LOAD_PATH, {})
+    ActionView::LookupContext::DetailsKey.clear
   end
 
   def teardown
     I18n.locale = :en
-    ActionView::LookupContext::DetailsKey.details_keys.clear
+  end
+
+  test "allows to override default_formats with ActionView::Base.default_formats" do
+    begin
+      formats = ActionView::Base.default_formats
+      ActionView::Base.default_formats = [:foo, :bar]
+
+      assert_equal [:foo, :bar], ActionView::LookupContext.new([]).default_formats
+    ensure
+      ActionView::Base.default_formats = formats
+    end
   end
 
   test "process view paths on initialization" do
@@ -84,9 +89,9 @@ class LookupContextTest < ActiveSupport::TestCase
   end
 
   test "found templates respects given formats if one cannot be found from template or handler" do
-    ActionView::Template::Handlers::ERB.expects(:default_format).returns(nil)
+    ActionView::Template::Handlers::Builder.expects(:default_format).returns(nil)
     @lookup_context.formats = [:text]
-    template = @lookup_context.find("hello_world", %w(test))
+    template = @lookup_context.find("hello", %w(test))
     assert_equal [:text], template.formats
   end
 
@@ -175,7 +180,7 @@ class LookupContextTest < ActiveSupport::TestCase
 
     assert_not_equal template, old_template
   end
-  
+
   test "responds to #prefixes" do
     assert_equal [], @lookup_context.prefixes
     @lookup_context.prefixes = ["foo"]
@@ -186,7 +191,7 @@ end
 class LookupContextWithFalseCaching < ActiveSupport::TestCase
   def setup
     @resolver = ActionView::FixtureResolver.new("test/_foo.erb" => ["Foo", Time.utc(2000)])
-    @resolver.stubs(:caching?).returns(false)
+    ActionView::Resolver.stubs(:caching?).returns(false)
     @lookup_context = ActionView::LookupContext.new(@resolver, {})
   end
 
@@ -253,6 +258,6 @@ class TestMissingTemplate < ActiveSupport::TestCase
       @lookup_context.view_paths.find("foo", "parent", true, details)
     end
     assert_match %r{Missing partial parent/foo with .* Searched in:\n  \* "/Path/to/views"\n}, e.message
-  end 
-  
+  end
+
 end

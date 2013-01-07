@@ -1,4 +1,6 @@
 require "isolation/abstract_unit"
+require 'rack/test'
+require 'env_helpers'
 
 class ::MyMailInterceptor
   def self.delivering_email(email); email; end
@@ -13,8 +15,10 @@ end
 class ::MyOtherMailObserver < ::MyMailObserver; end
 
 module ApplicationTests
-  class ConfigurationTest < Test::Unit::TestCase
+  class ConfigurationTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
+    include Rack::Test::Methods
+    include EnvHelpers
 
     def new_app
       File.expand_path("#{app_path}/../new_app")
@@ -39,16 +43,41 @@ module ApplicationTests
       FileUtils.rm_rf(new_app) if File.directory?(new_app)
     end
 
+    test "Rails.env does not set the RAILS_ENV environment variable which would leak out into rake tasks" do
+      require "rails"
+
+      switch_env "RAILS_ENV", nil do
+        Rails.env = "development"
+        assert_equal "development", Rails.env
+        assert_nil ENV['RAILS_ENV']
+      end
+    end
+
+    test "a renders exception on pending migration" do
+      add_to_config <<-RUBY
+        config.active_record.migration_error    = :page_load
+        config.consider_all_requests_local      = true
+        config.action_dispatch.show_exceptions  = true
+      RUBY
+
+      require "#{app_path}/config/environment"
+      ActiveRecord::Migrator.stubs(:needs_migration?).returns(true)
+
+      get "/foo"
+      assert_equal 500, last_response.status
+      assert_match "ActiveRecord::PendingMigrationError", last_response.body
+    end
+
     test "Rails.groups returns available groups" do
       require "rails"
 
       Rails.env = "development"
       assert_equal [:default, "development"], Rails.groups
-      assert_equal [:default, "development", :assets], Rails.groups(:assets => [:development])
-      assert_equal [:default, "development", :another, :assets], Rails.groups(:another, :assets => %w(development))
+      assert_equal [:default, "development", :assets], Rails.groups(assets: [:development])
+      assert_equal [:default, "development", :another, :assets], Rails.groups(:another, assets: %w(development))
 
       Rails.env = "test"
-      assert_equal [:default, "test"], Rails.groups(:assets => [:development])
+      assert_equal [:default, "test"], Rails.groups(assets: [:development])
 
       ENV["RAILS_GROUPS"] = "javascripts,stylesheets"
       assert_equal [:default, "test", "javascripts", "stylesheets"], Rails.groups
@@ -114,24 +143,34 @@ module ApplicationTests
       assert_instance_of Pathname, Rails.root
     end
 
-    test "marking the application as threadsafe sets the correct config variables" do
+    test "Rails.public_path should be a Pathname" do
       add_to_config <<-RUBY
-        config.threadsafe!
+        config.paths["public"] = "somewhere"
+      RUBY
+      require "#{app_path}/config/environment"
+      assert_instance_of Pathname, Rails.public_path
+    end
+
+    test "initialize an eager loaded, cache classes app" do
+      add_to_config <<-RUBY
+        config.eager_load = true
+        config.cache_classes = true
       RUBY
 
       require "#{app_path}/config/application"
-      assert AppTemplate::Application.config.allow_concurrency
+      assert AppTemplate::Application.initialize!
     end
 
-    test "asset_path defaults to nil for application" do
-      require "#{app_path}/config/environment"
-      assert_equal nil, AppTemplate::Application.config.asset_path
+    test "application is always added to eager_load namespaces" do
+      require "#{app_path}/config/application"
+      assert AppTemplate::Application, AppTemplate::Application.config.eager_load_namespaces
     end
 
-    test "the application can be marked as threadsafe when there are no frameworks" do
+    test "the application can be eager loaded even when there are no frameworks" do
       FileUtils.rm_rf("#{app_path}/config/environments")
       add_to_config <<-RUBY
-        config.threadsafe!
+        config.eager_load = true
+        config.cache_classes = true
       RUBY
 
       use_frameworks []
@@ -139,22 +178,6 @@ module ApplicationTests
       assert_nothing_raised do
         require "#{app_path}/config/application"
       end
-    end
-
-    test "frameworks are not preloaded by default" do
-      require "#{app_path}/config/environment"
-
-      assert ActionController.autoload?(:RecordIdentifier)
-    end
-
-    test "frameworks are preloaded with config.preload_frameworks is set" do
-      add_to_config <<-RUBY
-        config.preload_frameworks = true
-      RUBY
-
-      require "#{app_path}/config/environment"
-
-      assert !ActionController.autoload?(:RecordIdentifier)
     end
 
     test "filter_parameters should be able to set via config.filter_parameters" do
@@ -181,20 +204,14 @@ module ApplicationTests
       assert !$prepared
 
       require "#{app_path}/config/environment"
-      require 'rack/test'
-      extend Rack::Test::Methods
 
       get "/"
       assert $prepared
     end
 
     def assert_utf8
-      if RUBY_VERSION < '1.9'
-        assert_equal "UTF8", $KCODE
-      else
-        assert_equal Encoding::UTF_8, Encoding.default_external
-        assert_equal Encoding::UTF_8, Encoding.default_internal
-      end
+      assert_equal Encoding::UTF_8, Encoding.default_external
+      assert_equal Encoding::UTF_8, Encoding.default_internal
     end
 
     test "skipping config.encoding still results in 'utf-8' as the default" do
@@ -217,24 +234,27 @@ module ApplicationTests
       RUBY
 
       require "#{app_path}/config/application"
-      assert_equal File.join(app_path, "somewhere"), Rails.public_path
+      assert_equal Pathname.new(app_path).join("somewhere"), Rails.public_path
     end
 
-    test "config.secret_token is sent in env" do
+    test "Use key_generator when secret_key_base is set" do
       make_basic_app do |app|
-        app.config.secret_token = 'b3c631c314c0bbca50c1b2843150fe33'
+        app.config.secret_key_base = 'b3c631c314c0bbca50c1b2843150fe33'
         app.config.session_store :disabled
       end
 
       class ::OmgController < ActionController::Base
         def index
           cookies.signed[:some_key] = "some_value"
-          render :text => env["action_dispatch.secret_token"]
+          render text: cookies[:some_key]
         end
       end
 
       get "/"
-      assert_equal 'b3c631c314c0bbca50c1b2843150fe33', last_response.body
+
+      secret = app.key_generator.generate_key('signed cookie')
+      verifier = ActiveSupport::MessageVerifier.new(secret)
+      assert_equal 'some_value', verifier.verify(last_response.body)
     end
 
     test "protect from forgery is the default in a new app" do
@@ -242,12 +262,61 @@ module ApplicationTests
 
       class ::OmgController < ActionController::Base
         def index
-          render :inline => "<%= csrf_meta_tags %>"
+          render inline: "<%= csrf_meta_tags %>"
         end
       end
 
       get "/"
       assert last_response.body =~ /csrf\-param/
+    end
+
+    test "default method for update can be changed" do
+      app_file 'app/models/post.rb', <<-RUBY
+      class Post
+        extend ActiveModel::Naming
+        def to_key; [1]; end
+        def persisted?; true; end
+      end
+      RUBY
+
+      app_file 'app/controllers/posts_controller.rb', <<-RUBY
+      class PostsController < ApplicationController
+        def show
+          render inline: "<%= begin; form_for(Post.new) {}; rescue => e; e.to_s; end %>"
+        end
+
+        def update
+          render text: "update"
+        end
+      end
+      RUBY
+
+      add_to_config <<-RUBY
+        routes.prepend do
+          resources :posts
+        end
+      RUBY
+
+      require "#{app_path}/config/environment"
+
+      token = "cf50faa3fe97702ca1ae"
+      PostsController.any_instance.stubs(:form_authenticity_token).returns(token)
+      params = {authenticity_token: token}
+
+      get "/posts/1"
+      assert_match(/patch/, last_response.body)
+
+      patch "/posts/1", params
+      assert_match(/update/, last_response.body)
+
+      patch "/posts/1", params
+      assert_equal 200, last_response.status
+
+      put "/posts/1", params
+      assert_match(/update/, last_response.body)
+
+      put "/posts/1", params
+      assert_equal 200, last_response.status
     end
 
     test "request forgery token param can be changed" do
@@ -257,7 +326,7 @@ module ApplicationTests
 
       class ::OmgController < ActionController::Base
         def index
-          render :inline => "<%= csrf_meta_tags %>"
+          render inline: "<%= csrf_meta_tags %>"
         end
       end
 
@@ -265,37 +334,17 @@ module ApplicationTests
       assert last_response.body =~ /_xsrf_token_here/
     end
 
-    test "config.action_controller.perform_caching = true" do
-      make_basic_app do |app|
-        app.config.action_controller.perform_caching = true
-      end
-
-      class ::OmgController < ActionController::Base
-        @@count = 0
-
-        caches_action :index
-        def index
-          @@count += 1
-          render :text => @@count
-        end
-      end
-
-      get "/"
-      res = last_response.body
-      get "/"
-      assert_equal res, last_response.body # value should be unchanged
+    test "sets ActionDispatch.test_app" do
+      make_basic_app
+      assert_equal Rails.application, ActionDispatch.test_app
     end
 
-    test "sets all Active Record models to whitelist all attributes by default" do
-      add_to_config <<-RUBY
-        config.active_record.whitelist_attributes = true
-      RUBY
+    test "sets ActionDispatch::Response.default_charset" do
+      make_basic_app do |app|
+        app.config.action_dispatch.default_charset = "utf-16"
+      end
 
-      require "#{app_path}/config/environment"
-
-      assert_equal ActiveModel::MassAssignmentSecurity::WhiteList,
-                   ActiveRecord::Base.active_authorizers[:default].class
-      assert_equal [""], ActiveRecord::Base.active_authorizers[:default].to_a
+      assert_equal "utf-16", ActionDispatch::Response.default_charset
     end
 
     test "registers interceptors with ActionMailer" do
@@ -372,40 +421,26 @@ module ApplicationTests
       end
     end
 
-    test "config.action_controller.perform_caching = false" do
-      make_basic_app do |app|
-        app.config.action_controller.perform_caching = false
-      end
+    test "valid beginning of week is setup correctly" do
+      add_to_config <<-RUBY
+        config.root = "#{app_path}"
+          config.beginning_of_week = :wednesday
+      RUBY
 
-      class ::OmgController < ActionController::Base
-        @@count = 0
+      require "#{app_path}/config/environment"
 
-        caches_action :index
-        def index
-          @@count += 1
-          render :text => @@count
-        end
-      end
-
-      get "/"
-      res = last_response.body
-      get "/"
-      assert_not_equal res, last_response.body
+      assert_equal :wednesday, Rails.application.config.beginning_of_week
     end
 
-    test "config.asset_path is not passed through env" do
-      make_basic_app do |app|
-        app.config.asset_path = "/omg%s"
-      end
+    test "raises when an invalid beginning of week is defined in the config" do
+      add_to_config <<-RUBY
+        config.root = "#{app_path}"
+          config.beginning_of_week = :invalid
+      RUBY
 
-      class ::OmgController < ActionController::Base
-        def index
-          render :inline => "<%= image_path('foo.jpg') %>"
-        end
+      assert_raise(ArgumentError) do
+        require "#{app_path}/config/environment"
       end
-
-      get "/"
-      assert_equal "/omg/images/foo.jpg", last_response.body
     end
 
     test "config.action_view.cache_template_loading with cache_classes default" do
@@ -453,7 +488,7 @@ module ApplicationTests
 
       class ::OmgController < ActionController::Base
         def index
-          render :text => env["action_dispatch.show_exceptions"]
+          render text: env["action_dispatch.show_exceptions"]
         end
       end
 
@@ -463,7 +498,7 @@ module ApplicationTests
 
     test "config.action_controller.wrap_parameters is set in ActionController::Base" do
       app_file 'config/initializers/wrap_parameters.rb', <<-RUBY
-        ActionController::Base.wrap_parameters :format => [:json]
+        ActionController::Base.wrap_parameters format: [:json]
       RUBY
 
       app_file 'app/models/post.rb', <<-RUBY
@@ -474,26 +509,52 @@ module ApplicationTests
       end
       RUBY
 
+      app_file 'app/controllers/application_controller.rb', <<-RUBY
+      class ApplicationController < ActionController::Base
+        protect_from_forgery with: :reset_session # as we are testing API here
+      end
+      RUBY
+
       app_file 'app/controllers/posts_controller.rb', <<-RUBY
       class PostsController < ApplicationController
-        def index
-          render :text => params[:post].inspect
+        def create
+          render text: params[:post].inspect
         end
       end
       RUBY
 
       add_to_config <<-RUBY
-        routes.append do
+        routes.prepend do
           resources :posts
         end
       RUBY
 
       require "#{app_path}/config/environment"
-      require "rack/test"
-      extend Rack::Test::Methods
 
       post "/posts.json", '{ "title": "foo", "name": "bar" }', "CONTENT_TYPE" => "application/json"
       assert_equal '{"title"=>"foo"}', last_response.body
+    end
+
+    test "config.action_controller.permit_all_parameters = true" do
+      app_file 'app/controllers/posts_controller.rb', <<-RUBY
+      class PostsController < ActionController::Base
+        def create
+          render text: params[:post].permitted? ? "permitted" : "forbidden"
+        end
+      end
+      RUBY
+
+      add_to_config <<-RUBY
+        routes.prepend do
+          resources :posts
+        end
+        config.action_controller.permit_all_parameters = true
+      RUBY
+
+      require "#{app_path}/config/environment"
+
+      post "/posts", {post: {"title" =>"zomg"}}
+      assert_equal 'permitted', last_response.body
     end
 
     test "config.action_dispatch.ignore_accept_header" do
@@ -504,8 +565,8 @@ module ApplicationTests
       class ::OmgController < ActionController::Base
         def index
           respond_to do |format|
-            format.html { render :text => "HTML" }
-            format.xml { render :text => "XML" }
+            format.html { render text: "HTML" }
+            format.xml { render text: "XML" }
           end
         end
       end
@@ -513,7 +574,7 @@ module ApplicationTests
       get "/", {}, "HTTP_ACCEPT" => "application/xml"
       assert_equal 'HTML', last_response.body
 
-      get "/", { :format => :xml }, "HTTP_ACCEPT" => "application/xml"
+      get "/", { format: :xml }, "HTTP_ACCEPT" => "application/xml"
       assert_equal 'XML', last_response.body
     end
 
@@ -521,9 +582,35 @@ module ApplicationTests
       make_basic_app
 
       assert_respond_to app, :env_config
-      assert_equal      app.env_config['action_dispatch.parameter_filter'], app.config.filter_parameters
-      assert_equal      app.env_config['action_dispatch.secret_token'],     app.config.secret_token
-      assert_equal      app.env_config['action_dispatch.show_exceptions'],  app.config.action_dispatch.show_exceptions
+      assert_equal      app.env_config['action_dispatch.parameter_filter'],  app.config.filter_parameters
+      assert_equal      app.env_config['action_dispatch.show_exceptions'],   app.config.action_dispatch.show_exceptions
+      assert_equal      app.env_config['action_dispatch.logger'],            Rails.logger
+      assert_equal      app.env_config['action_dispatch.backtrace_cleaner'], Rails.backtrace_cleaner
+      assert_equal      app.env_config['action_dispatch.key_generator'],     Rails.application.key_generator
+    end
+
+    test "config.colorize_logging default is true" do
+      make_basic_app
+      assert app.config.colorize_logging
+    end
+
+    test "config.session_store with :active_record_store with activerecord-session_store gem" do
+      begin
+        make_basic_app do |app|
+          ActionDispatch::Session::ActiveRecordStore = Class.new(ActionDispatch::Session::CookieStore)
+          app.config.session_store :active_record_store
+        end
+      ensure
+        ActionDispatch::Session.send :remove_const, :ActiveRecordStore
+      end
+    end
+
+    test "config.session_store with :active_record_store without activerecord-session_store gem" do
+      assert_raise RuntimeError, /activerecord-session_store/ do
+        make_basic_app do |app|
+          app.config.session_store :active_record_store
+        end
+      end
     end
   end
 end
