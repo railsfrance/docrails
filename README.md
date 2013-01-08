@@ -14,7 +14,9 @@ Contributions are welcome, here how to contribute :
 
     git clone git://github.com/railsfrance/docrails.git
 
-#### 2. Create a pull request
+#### 2. Add your name to the right of the file you're translating in [the wiki](https://github.com/railsfrance/docrails/wiki)
+
+#### 3. Create a pull request
 
 We will review your translation and merge it.
 
