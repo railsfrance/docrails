@@ -1,15 +1,15 @@
 Vue d'ensemble d'Action Controller
 ==================================
 
-Dans ce guide, vous allez apprendre comment les controlleurs
+Dans ce guide, vous allez apprendre comment les contrôleurs
 fonctionnent et comment s'en servir dans le cycle de votre application.
 
 Après avoir lu ce guide, vous saurez :
 
-* Comment suivre le chemin d'une requête à travers le controlleur.
+* Comment suivre le chemin d'une requête à travers le contrôleur.
 * Pourquoi et comment enregistrer des données dans des sessions ou
 cookies.
-* Comment travailler avec les filtres pour éxecuter du code pendant le
+* Comment travailler avec les filtres pour exécuter du code pendant le
 traitement de la requête.
 * Comment utiliser l'authentification HTTP avec Action Controller.
 * Comment envoyer en continue des données au navigateur.
