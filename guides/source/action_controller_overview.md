@@ -20,16 +20,30 @@ de la requête.
 
 --------------------------------------------------------------------------------
 
-What Does a Controller Do?
+Que fait le contrôleur ?
 --------------------------
 
-Action Controller is the C in MVC. After routing has determined which controller to use for a request, your controller is responsible for making sense of the request and producing the appropriate output. Luckily, Action Controller does most of the groundwork for you and uses smart conventions to make this as straightforward as possible.
+Action Controller est le C dans MVC. Après que le routeur ai déterminé
+quel contrôleur utiliser pour une requête, votre contrôleur doit faire
+le nécessaire pour sortir un résultat en lien avec la requête. Par
+chance, Action Controller fait le travail de base et utilise des
+conventions intelligentes pour le rendre le plus simple et rapide que
+possible.
 
-For most conventional [RESTful](http://en.wikipedia.org/wiki/Representational_state_transfer) applications, the controller will receive the request (this is invisible to you as the developer), fetch or save data from a model and use a view to create HTML output. If your controller needs to do things a little differently, that's not a problem, this is just the most common way for a controller to work.
+Pour les applications de type
+[RESTful](http://fr.wikipedia.org/wiki/Representational_State_Transfer),
+le contrôleur reçoit la requête (c'est invisible pour les développeurs),
+récupère ou sauvegarde les données du modèle et utilise la vue pour
+générer le html. Si votre contrôleur à besoin de faire les choses un
+peu différemment, ce n'est pas un problème, c'est juste la façon la plus
+conventionnelle pour le contrôleur de travailler.
 
-A controller can thus be thought of as a middle man between models and views. It makes the model data available to the view so it can display that data to the user, and it saves or updates data from the user to the model.
+Un contrôleur fait le lien entre les modèles et les vues. Il rend
+disponible les données du modèle pour la vue, ce qui nous permet de les
+afficher, puis il enregistre ou met à jour les données du modèle
+provenant de l'utilisateur.
 
-NOTE: For more details on the routing process, see [Rails Routing from the Outside In](routing.html).
+Pour plus de détails sur le fonctionnement du routeur : [Rails Routing from the Outside In](routing.html).
 
 Methods and Actions
 -------------------
