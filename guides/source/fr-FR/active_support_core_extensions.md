@@ -14,68 +14,69 @@ Après lecture de ce guide, vous saurez :
 
 --------------------------------------------------------------------------------
 
-How to Load Core Extensions
----------------------------
+Comment charger les Core Extensions
+-----------------------------------
 
-### Stand-Alone Active Support
+### Active Support seul
 
-In order to have a near-zero default footprint, Active Support does not load anything by default. It is broken in small pieces so that you can load just what you need, and also has some convenience entry points to load related extensions in one shot, even everything.
+Afin d'avoir une emprunte la plus légère possible, Active Support ne charge rien par défaut. Il est divisé en petites parties afin que vous puissiez charger uniquement ce dont vous avez besoin. Il rend cependant assez facile le chargement d'extensions relatives les unes aux autres ou simplement l'ensemble de celles-ci.
 
-Thus, after a simple require like:
+Par exemple, après le simple require suivant :
 
 ```ruby
 require 'active_support'
 ```
 
-objects do not even respond to `blank?`. Let's see how to load its definition.
+les objets ne répondent même pas à un appel à `blank?`. Voyons comment charger sa définition.
 
-#### Cherry-picking a Definition
+#### Séléctionner une définition
 
-The most lightweight way to get `blank?` is to cherry-pick the file that defines it.
+La façon la plus légère d'obtenir `blank?` est de séléctionner le fichier qui la définit.
 
 For every single method defined as a core extension this guide has a note that says where such a method is defined. In the case of `blank?` the note reads:
 
-NOTE: Defined in `active_support/core_ext/object/blank.rb`.
+NOTE: Définie dans `active_support/core_ext/object/blank.rb`.
 
-That means that this single call is enough:
+Cela signifie que ce simple appel est suffisant :
 
 ```ruby
 require 'active_support/core_ext/object/blank'
 ```
 
-Active Support has been carefully revised so that cherry-picking a file loads only strictly needed dependencies, if any.
+Active Support a été revu avec attention afin que la séléction d'un fichier n'entraine que le chargement des dépendences nécessaires, si besoin est.
 
-#### Loading Grouped Core Extensions
+#### Charger un groupe de _Core Extensions_
 
 The next level is to simply load all extensions to `Object`. As a rule of thumb, extensions to `SomeClass` are available in one shot by loading `active_support/core_ext/some_class`.
+L'étape suivante est de charger toutes les extensions de `Object`. Par convention, les extensions apportées à `UneClasse` sont disponibles directement en chargeant `active_support/core_ext/une_classe`.
 
-Thus, to load all extensions to `Object` (including `blank?`):
+Pour donc charger toutes les extensions de `Object` (y compris `blank?`) :
 
 ```ruby
 require 'active_support/core_ext/object'
 ```
 
-#### Loading All Core Extensions
+#### Charger toutes les _Core Extensions_
 
-You may prefer just to load all core extensions, there is a file for that:
+Dans le cas où vous préférez charger simplement toutes les _core extensions_, il existe un fichier pour cela :
 
 ```ruby
 require 'active_support/core_ext'
 ```
 
-#### Loading All Active Support
+#### Charger tout Active Support
 
-And finally, if you want to have all Active Support available just issue:
+Enfin, si vous souhaitez charger l'intégralité d'Active Support :
 
 ```ruby
 require 'active_support/all'
 ```
 
-That does not even put the entire Active Support in memory upfront indeed, some stuff is configured via `autoload`, so it is only loaded if used.
+Cela ne charge cependant pas tout Active Support en mémoire. En effet, certaines dépendances sont chargées via `autoload` et ne sont donc mises en mémoire qu'en cas de besoin.
 
-### Active Support Within a Ruby on Rails Application
+### Active Support dans une application Ruby on Rails
 
-A Ruby on Rails application loads all Active Support unless `config.active_support.bare` is true. In that case, the application will only load what the framework itself cherry-picks for its own needs, and can still cherry-pick itself at any granularity level, as explained in the previous section.
+Une application Ruby on Rails charge tout Active Support à moins que `config.active_support.bare` soit à `true`. Dans ce cas, l'application ne charge que ce que le framework séléctionne lui-même, pour ses propres besoins, et peut charger le reste elle-même à n'importe quel niveau de granularité.
 
 Extensions to All Objects
 -------------------------
