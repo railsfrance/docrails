@@ -19,7 +19,7 @@ Comment charger les Core Extensions
 
 ### Active Support seul
 
-Afin d'avoir une emprunte la plus légère possible, Active Support ne charge rien par défaut. Il est divisé en petites parties afin que vous puissiez charger uniquement ce dont vous avez besoin. Il rend cependant assez facile le chargement d'extensions relatives les unes aux autres ou simplement l'ensemble de celles-ci.
+Afin d'avoir une empreinte la plus légère possible, Active Support ne charge rien par défaut. Il est divisé en petites parties afin que vous puissiez charger uniquement ce dont vous avez besoin. Il rend cependant assez facile le chargement d'extensions relatives les unes aux autres ou simplement l'ensemble de celles-ci.
 
 Par exemple, après le simple require suivant :
 
@@ -33,7 +33,7 @@ les objets ne répondent même pas à un appel à `blank?`. Voyons comment charg
 
 La façon la plus légère d'obtenir `blank?` est de séléctionner le fichier qui la définit.
 
-For every single method defined as a core extension this guide has a note that says where such a method is defined. In the case of `blank?` the note reads:
+Pour chaque méthode définie comme une _core extension_, ce guide contient une note indiquant où cette méthode est définie. Dans le cas de `blank?` cette note indique :
 
 NOTE: Définie dans `active_support/core_ext/object/blank.rb`.
 
@@ -43,11 +43,10 @@ Cela signifie que ce simple appel est suffisant :
 require 'active_support/core_ext/object/blank'
 ```
 
-Active Support a été revu avec attention afin que la séléction d'un fichier n'entraine que le chargement des dépendences nécessaires, si besoin est.
+Active Support a été revu avec attention afin que la sélection d'un fichier n'entraine que le chargement des dépendances nécessaires, si besoin est.
 
 #### Charger un groupe de _Core Extensions_
 
-The next level is to simply load all extensions to `Object`. As a rule of thumb, extensions to `SomeClass` are available in one shot by loading `active_support/core_ext/some_class`.
 L'étape suivante est de charger toutes les extensions de `Object`. Par convention, les extensions apportées à `UneClasse` sont disponibles directement en chargeant `active_support/core_ext/une_classe`.
 
 Pour donc charger toutes les extensions de `Object` (y compris `blank?`) :
