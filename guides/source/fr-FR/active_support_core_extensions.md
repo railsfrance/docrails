@@ -77,26 +77,26 @@ Cela ne charge cependant pas tout Active Support en mémoire. En effet, certaine
 
 Une application Ruby on Rails charge tout Active Support à moins que `config.active_support.bare` soit à `true`. Dans ce cas, l'application ne charge que ce que le framework séléctionne lui-même, pour ses propres besoins, et peut charger le reste elle-même à n'importe quel niveau de granularité.
 
-Extensions to All Objects
--------------------------
+Extensions apportées à tous les Objets
+--------------------------------------
 
-### `blank?` and `present?`
+### `blank?` et `present?`
 
-The following values are considered to be blank in a Rails application:
+Les valeurs suivantes sont considérées comme vides (blank) dans une application Rails :
 
-* `nil` and `false`,
+* `nil` et `false` ;
 
-* strings composed only of whitespace (see note below),
+* les chaines de caractères composées uniquement d'espacements (voir ci-dessous) ;
 
-* empty arrays and hashes, and
+* les tableaux et hashes vides ;
 
-* any other object that responds to `empty?` and is empty.
+* tout autre objet répondant à `empty?` et étant vide.
 
-INFO: The predicate for strings uses the Unicode-aware character class `[:space:]`, so for example U+2029 (paragraph separator) is considered to be whitespace.
+INFO: Le prédicat pour les chaines de caractère utilise la classe `[:space:]`, compatible avec Unicode. Par exemple, U+2029 (séparateur de paragraphe) est considéré comme un espacement.
 
-WARNING: Note that numbers are not mentioned. In particular, 0 and 0.0 are **not** blank.
+WARNING. Notez que les nombres ne sont pas mentionnés. En particulier 0 et 0.0 ne sont **pas** vides.
 
-For example, this method from `ActionDispatch::Session::AbstractStore` uses `blank?` for checking whether a session key is present:
+Par exemple, cette méthode issue de `ActionDispatch::Session::AbstractStore` utilise `blank?` pour tester si une clé de session est présente :
 
 ```ruby
 def ensure_session_key!
@@ -106,7 +106,7 @@ def ensure_session_key!
 end
 ```
 
-The method `present?` is equivalent to `!blank?`. This example is taken from `ActionDispatch::Http::Cache::Response`:
+La méthode `present?` est équivalente à `!blank?`. Cet exemple est tiré de `ActionDispatch::Http::Cache::Response` :
 
 ```ruby
 def set_conditional_cache_control!
@@ -115,41 +115,41 @@ def set_conditional_cache_control!
 end
 ```
 
-NOTE: Defined in `active_support/core_ext/object/blank.rb`.
+NOTE: Définie dans `active_support/core_ext/object/blank.rb`.
 
 ### `presence`
 
-The `presence` method returns its receiver if `present?`, and `nil` otherwise. It is useful for idioms like this:
+La méthode `presence` retourne son receveur si `present?` est vrai, `nil` dans le cas contraire. C'est par exemple utile pour ce genre d'idiomes :
 
 ```ruby
 host = config[:host].presence || 'localhost'
 ```
 
-NOTE: Defined in `active_support/core_ext/object/blank.rb`.
+NOTE: Définie dans `active_support/core_ext/object/blank.rb`.
 
 ### `duplicable?`
 
-A few fundamental objects in Ruby are singletons. For example, in the whole life of a program the integer 1 refers always to the same instance:
+Quelques objets fondamentaux de Ruby sont des singletons. Par exemple, durant toute la vie d'un programme, l'entier 1 référence toujours la même instance :
 
 ```ruby
 1.object_id                 # => 3
 Math.cos(0).to_i.object_id  # => 3
 ```
 
-Hence, there's no way these objects can be duplicated through `dup` or `clone`:
+Il est donc impossible de dupliquer ces objets via `dup` ou `clone` :
 
 ```ruby
 true.dup  # => TypeError: can't dup TrueClass
 ```
 
-Some numbers which are not singletons are not duplicable either:
+Certains nombres ne sont pas des singletons mais ne peuvent pas être dupliqués pour autant :
 
 ```ruby
 0.0.clone        # => allocator undefined for Float
 (2**1024).clone  # => allocator undefined for Bignum
 ```
 
-Active Support provides `duplicable?` to programmatically query an object about this property:
+Active Support fournit `duplicatable?` pour questionner un objet sur cette propriété :
 
 ```ruby
 "foo".duplicable? # => true
@@ -158,15 +158,15 @@ Active Support provides `duplicable?` to programmatically query an object about 
 false.duplicable?  # => false
 ```
 
-By definition all objects are `duplicable?` except `nil`, `false`, `true`, symbols, numbers, class, and module objects.
+Par définition, tous les objets sont `duplicable?` en dehors de `nil`, `false`, `true`, des symboles, des nombres, des classes et des modules.
 
-WARNING: Any class can disallow duplication by removing `dup` and `clone` or raising exceptions from them. Thus only `rescue` can tell whether a given arbitrary object is duplicable. `duplicable?` depends on the hard-coded list above, but it is much faster than `rescue`. Use it only if you know the hard-coded list is enough in your use case.
+WARNING. N'importe quelle classe peut empêcher sa duplication en supprimant `dup` et `clone` de ses méthodes ou en levant une exception depuis celles-ci. De cette façon, seul `rescue` peut déterminer si un objet peut ou non être dupliqué. `duplicable?` repose strictement sur la liste ci-dessus mais est bien plus rapide que `rescue`. Ne l'utilisez que si vous êtes sûr que la liste précédente est suffisante dans votre cas.
 
-NOTE: Defined in `active_support/core_ext/object/duplicable.rb`.
+NOTE: Définie dans `active_support/core_ext/object/duplicable.rb`.
 
 ### `deep_dup`
 
-The `deep_dup` method returns deep copy of a given object. Normally, when you `dup` an object that contains other objects, ruby does not `dup` them, so it creates a shallow copy of the object. If you have an array with a string, for example, it will look like this:
+La méthode `deep_dup` retourne une copie profonde d'un objet. En temps normal, lorsque `dup` est appelé sur un objet qui contient d'autres objets, Ruby ne les duplique pas et crée donc une copie superficielle de cet objet. Si par exemple vous avez un tableau contenant une chaine de caractère cela ressemblera à ceci :
 
 ```ruby
 array     = ['string']
@@ -174,20 +174,20 @@ duplicate = array.dup
 
 duplicate.push 'another-string'
 
-# the object was duplicated, so the element was added only to the duplicate
+# l'objet est dupliqué, l'élément a donc été ajouté au duplicata
 array     #=> ['string']
 duplicate #=> ['string', 'another-string']
 
 duplicate.first.gsub!('string', 'foo')
 
-# first element was not duplicated, it will be changed in both arrays
+# le premier élément n'a pas été dupliqué, il est donc modifié dans les deux tableaux
 array     #=> ['foo']
 duplicate #=> ['foo', 'another-string']
 ```
 
-As you can see, after duplicating the `Array` instance, we got another object, therefore we can modify it and the original object will stay unchanged. This is not true for array's elements, however. Since `dup` does not make deep copy, the string inside the array is still the same object.
+Comme vous pouvez le voir, après duplication de l'instance de `Array`, nous avons un autre objet. Nous pouvons donc le modifier tout en gardant l'original intact. Cela ne s'applique pas aux éléments du tableau. Puisque `dup` ne crée pas de copie profonde, la chaine de caractère contenue dans le tableau est toujours le même objet.
 
-If you need a deep copy of an object, you should use `deep_dup`. Here is an example:
+Si vous avez besoin d'une copie profonde d'un objet, vous devriez utiliser `deep_dup`. Voici un exemple :
 
 ```ruby
 array     = ['string']
@@ -199,7 +199,7 @@ array     #=> ['string']
 duplicate #=> ['foo']
 ```
 
-If the object is not duplicable, `deep_dup` will just return it:
+Si l'objet n'est pas duplicable, `deep_dup` le retournera simplement :
 
 ```ruby
 number = 1
@@ -207,25 +207,25 @@ duplicate = number.deep_dup
 number.object_id == duplicate.object_id   # => true
 ```
 
-NOTE: Defined in `active_support/core_ext/object/deep_dup.rb`.
+NOTE: Définie dans `active_support/core_ext/object/deep_dup.rb`.
 
 ### `try`
 
-When you want to call a method on an object only if it is not `nil`, the simplest way to achieve it is with conditional statements, adding unnecessary clutter. The alternative is to use `try`. `try` is like `Object#send` except that it returns `nil` if sent to `nil`.
+Lorsque vous souhaitez appeler un méthode sur un objet uniquement si celui-ci est différent de `nil`, le moyen le plus simple de le faire est par le biais d'une conditionnelle mais cela ajoute une charge inutile. L'alternative est l'utilisation de `try`. `try` est équivalent à `Object#send` mais retourne `nil` quand il est appelé sur `nil`.
 
-Here is an example:
+Voici un exemple :
 
 ```ruby
-# without try
+# sans try
 unless @number.nil?
   @number.next
 end
 
-# with try
+# avec try
 @number.try(:next)
 ```
 
-Another example is this code from `ActiveRecord::ConnectionAdapters::AbstractAdapter` where `@logger` could be `nil`. You can see that the code uses `try` and avoids an unnecessary check.
+Un autre exemple est ce code issu de `ActiveRecord::ConnectionAdapters::AbstractAdapter` où `@logger` peut être `nil`. Comme vous pouvez le voir, ce code utilise `try` et évite une vérification inutile.
 
 ```ruby
 def log_info(sql, name, ms)
@@ -236,17 +236,17 @@ def log_info(sql, name, ms)
 end
 ```
 
-`try` can also be called without arguments but a block, which will only be executed if the object is not nil:
+`try` peut également être appelé avec un bloc plutôt qu'un argument. Ce bloc ne sera exécuté que si l'objet n'est pas `nil` :
 
 ```ruby
 @person.try { |p| "#{p.first_name} #{p.last_name}" }
 ```
 
-NOTE: Defined in `active_support/core_ext/object/try.rb`.
+NOTE: Définie dans `active_support/core_ext/object/try.rb`.
 
 ### `class_eval(*args, &block)`
 
-You can evaluate code in the context of any object's singleton class using `class_eval`:
+Vous pouvez évaluer du code dans le contexte de la classe de n'importe quel objet en utilisant `class_eval` :
 
 ```ruby
 class Proc
@@ -263,52 +263,52 @@ class Proc
 end
 ```
 
-NOTE: Defined in `active_support/core_ext/kernel/singleton_class.rb`.
+NOTE: Définie dans `active_support/core_ext/kernel/singleton_class.rb`.
 
 ### `acts_like?(duck)`
 
-The method `acts_like?` provides a way to check whether some class acts like some other class based on a simple convention: a class that provides the same interface as `String` defines
+La méthode `acts_like?` fournit un moyen de vérifier si une classe agit comme une autre en se basant sur une simple convention : une classe qui fournit la même interface que `String` dénifit
 
 ```ruby
 def acts_like_string?
 end
 ```
 
-which is only a marker, its body or return value are irrelevant. Then, client code can query for duck-type-safeness this way:
+Qui est simplement un marqueur, peut importe son contenu ou sa valeur de retour. Le code client peut donc vérifier la possibilité de duck-typing de cette façon :
 
 ```ruby
 some_klass.acts_like?(:string)
 ```
 
-Rails has classes that act like `Date` or `Time` and follow this contract.
+Rails contient des classes qui agissent comme `Date` ou `Time` et remplissent ce contrat.
 
-NOTE: Defined in `active_support/core_ext/object/acts_like.rb`.
+NOTE: Définie dans `active_support/core_ext/object/acts_like.rb`.
 
 ### `to_param`
 
-All objects in Rails respond to the method `to_param`, which is meant to return something that represents them as values in a query string, or as URL fragments.
+Dans Rails, tous les objets répondent à la méthode `to_param`. Celle-ci est censée retourner une représentation de ces objets utilisable dans une _query string_ ou un fragment d'URL.
 
-By default `to_param` just calls `to_s`:
+Par défaut, `to_param` appelle simplement `to_s` :
 
 ```ruby
 7.to_param # => "7"
 ```
 
-The return value of `to_param` should **not** be escaped:
+La valeur retournée par `to_param` ne devrait **pas** être échappée :
 
 ```ruby
 "Tom & Jerry".to_param # => "Tom & Jerry"
 ```
 
-Several classes in Rails overwrite this method.
+Un certain nombre de classes de Rails surchargent cette méthode.
 
-For example `nil`, `true`, and `false` return themselves. `Array#to_param` calls `to_param` on the elements and joins the result with "/":
+Par exemple, `nil`, `true` et `false` se retournent eux-mêmes. `Array#to_param` appelle `to_param` sur chaque élément et concatène les résultats avec "/" :
 
 ```ruby
 [0, true, String].to_param # => "0/true/String"
 ```
 
-Notably, the Rails routing system calls `to_param` on models to get a value for the `:id` placeholder. `ActiveRecord::Base#to_param` returns the `id` of a model, but you can redefine that method in your models. For example, given
+À noter que le système de routage de Rails appelle `to_param` sur les modèles afin d'obtenir une valeur pour le placeholder `:id`. `ActiveRecord::Base#to_param` retourne le champ `id` d'un modèle mais il est possible surcharger cette méthode dans vos modèles. Par exemple, avec
 
 ```ruby
 class User
@@ -318,19 +318,19 @@ class User
 end
 ```
 
-we get:
+nous obtenons :
 
 ```ruby
 user_path(@user) # => "/users/357-john-smith"
 ```
 
-WARNING. Controllers need to be aware of any redefinition of `to_param` because when a request like that comes in "357-john-smith" is the value of `params[:id]`.
+WARNING. Les contrôleurs doivent être au courant de cette redéfinition de `to_param` car lorsqu'une requête comme celle-ci arrive, "357-john-smith" est la valeur de `params[:id]`.
 
-NOTE: Defined in `active_support/core_ext/object/to_param.rb`.
+NOTE: Définie dans `active_support/core_ext/object/to_param.rb`.
 
 ### `to_query`
 
-Except for hashes, given an unescaped `key` this method constructs the part of a query string that would map such key to what `to_param` returns. For example, given
+En dehors des hashes, cette méthode construit, à partir d'une clé donnée, le morceau de _query string_ correspondant à l'association de cette clé et de la valeur de `to_param`. Par exemple, avec
 
 ```ruby
 class User
@@ -340,48 +340,48 @@ class User
 end
 ```
 
-we get:
+nous obtenons :
 
 ```ruby
 current_user.to_query('user') # => user=357-john-smith
 ```
 
-This method escapes whatever is needed, both for the key and the value:
+Cette méthode échappe tout ce qui doit l'être, dans la clé comme dans la valeur :
 
 ```ruby
 account.to_query('company[name]')
 # => "company%5Bname%5D=Johnson+%26+Johnson"
 ```
 
-so its output is ready to be used in a query string.
+sa sortie est donc directement utilisable dans un _query string_.
 
-Arrays return the result of applying `to_query` to each element with `_key_[]` as key, and join the result with "&":
+Les tableaux appellent `to_query` sur chaque élément avec `_key_[]` comme clé puis concatène les résultats avec "&" :
 
 ```ruby
 [3.4, -45.6].to_query('sample')
 # => "sample%5B%5D=3.4&sample%5B%5D=-45.6"
 ```
 
-Hashes also respond to `to_query` but with a different signature. If no argument is passed a call generates a sorted series of key/value assignments calling `to_query(key)` on its values. Then it joins the result with "&":
+Les hashes répondent également à `to_query` mais avec une signature différente. Si aucun argument n'est passé, un appel génère une liste triée d'associations clé/valeur en appelant `to_query(key)` sur ses valeurs. Les résultats sont ensuite concatènés avec "&" :
 
 ```ruby
 {c: 3, b: 2, a: 1}.to_query # => "a=1&b=2&c=3"
 ```
 
-The method `Hash#to_query` accepts an optional namespace for the keys:
+La méthode `Hash#to_query` accepte un _namespace_ (espace de nommage) facultatif pour les clés :
 
 ```ruby
 {id: 89, name: "John Smith"}.to_query('user')
 # => "user%5Bid%5D=89&user%5Bname%5D=John+Smith"
 ```
 
-NOTE: Defined in `active_support/core_ext/object/to_query.rb`.
+NOTE: Définie dans `active_support/core_ext/object/to_query.rb`.
 
 ### `with_options`
 
-The method `with_options` provides a way to factor out common options in a series of method calls.
+La méthode `with_options` permet de factoriser un groupe d'options communes à un certain nombre d'appels de méthodes.
 
-Given a default options hash, `with_options` yields a proxy object to a block. Within the block, methods called on the proxy are forwarded to the receiver with their options merged. For example, you get rid of the duplication in:
+À partir d'un hash par défaut, `with_options` fournit un _objet proxy_ au bloc qui lui est passé. Dans ce bloc, les appels de méthodes sur cet _objet proxy_ sont transmis au receveur avec leurs options fusionnées. Par exemple, pour supprimer les répétitions dans :
 
 ```ruby
 class Account < ActiveRecord::Base
@@ -392,7 +392,7 @@ class Account < ActiveRecord::Base
 end
 ```
 
-this way:
+nous pouvons faire :
 
 ```ruby
 class Account < ActiveRecord::Base
@@ -405,7 +405,7 @@ class Account < ActiveRecord::Base
 end
 ```
 
-That idiom may convey _grouping_ to the reader as well. For example, say you want to send a newsletter whose language depends on the user. Somewhere in the mailer you could group locale-dependent bits like this:
+Cet idiome permet également un regroupement visuel. Par exemple, vous souhaitez envoyer une newsletter dont la langue dépend de l'utilisateur. Dans le mailer, vous pourriez grouper les morceaux dépendants de la locale comme ceci :
 
 ```ruby
 I18n.with_options locale: user.locale, scope: "newsletter" do |i18n|
@@ -414,18 +414,17 @@ I18n.with_options locale: user.locale, scope: "newsletter" do |i18n|
 end
 ```
 
-TIP: Since `with_options` forwards calls to its receiver they can be nested. Each nesting level will merge inherited defaults in addition to their own.
+TIP: Puisque `with_options` transmet les appels à son receveur, plusieurs `with_options` peuvent être imbriqués. Chaque niveau d'imbrication va fusionner ses options aux précédentes.
 
-NOTE: Defined in `active_support/core_ext/object/with_options.rb`.
+NOTE: Définie dans `active_support/core_ext/object/with_options.rb`.
 
-### Instance Variables
+### Variables d'instance
 
-Active Support provides several methods to ease access to instance variables.
+Active Support fournit un certain nombre de méthodes pour accéder aux variables d'instances.
 
 #### `instance_values`
 
-The method `instance_values` returns a hash that maps instance variable names without "@" to their
-corresponding values. Keys are strings:
+La méthode `instance_values` retourne un hash qui fait correspondre les noms des variables, sans le "@", à leurs valeurs. Les clés sont des chaines de caractères :
 
 ```ruby
 class C
@@ -437,17 +436,17 @@ end
 C.new(0, 1).instance_values # => {"x" => 0, "y" => 1}
 ```
 
-NOTE: Defined in `active_support/core_ext/object/instance_variables.rb`.
+NOTE: Définie dans `active_support/core_ext/object/instance_variables.rb`.
 
-### Silencing Warnings, Streams, and Exceptions
+### Ignorer les warnings, flux et exceptions
 
-The methods `silence_warnings` and `enable_warnings` change the value of `$VERBOSE` accordingly for the duration of their block, and reset it afterwards:
+Les méthodes  `silence_warnings` et `enable_warnings` changent la valeur de `$VERBOSE` (_silence_ désactive, _enable_ active) pendant l'exécution de leurs blocs et rétablissent ensuite sa valeur :
 
 ```ruby
 silence_warnings { Object.const_set "RAILS_DEFAULT_LOGGER", logger }
 ```
 
-You can silence any stream while a block runs with `silence_stream`:
+Vous pouvez taire n'importe quel flux durant l'exécution du bloc de `silence_stream` :
 
 ```ruby
 silence_stream(STDOUT) do
@@ -455,30 +454,30 @@ silence_stream(STDOUT) do
 end
 ```
 
-The `quietly` method addresses the common use case where you want to silence STDOUT and STDERR, even in subprocesses:
+La méthode `quietly` permet de taire STDOUT et STDOUT, y compris dans les sous-processus :
 
 ```ruby
 quietly { system 'bundle install' }
 ```
 
-For example, the railties test suite uses that one in a few places to prevent command messages from being echoed intermixed with the progress status.
+Par exemple, la suite de tests des _railties_ l'utilise à quelques endroits pour éviter que messages des commandes soient affichées au milieu du statut de progression.
 
-Silencing exceptions is also possible with `suppress`. This method receives an arbitrary number of exception classes. If an exception is raised during the execution of the block and is `kind_of?` any of the arguments, `suppress` captures it and returns silently. Otherwise the exception is reraised:
+Taire les exceptions est également possible grâce à `suppress`. Cette méthode reçoit un nombre quelconque de classes d'exceptions. Si une exception est levée durant l'exécution du bloc et est du type (`kind_of?`) d'un des arguments, `suppress` la capture et retourne silencieusement. Si l'exception n'est pas dans la liste, elle est levée de nouveau :
 
 ```ruby
-# If the user is locked the increment is lost, no big deal.
+# Si l'utilisateur est bloqué, l'incrément est perdu ce qui n'est pas très grave.
 suppress(ActiveRecord::StaleObjectError) do
   current_user.increment! :visits
 end
 ```
 
-NOTE: Defined in `active_support/core_ext/kernel/reporting.rb`.
+NOTE: Définie dans `active_support/core_ext/kernel/reporting.rb`.
 
 ### `in?`
 
-The predicate `in?` tests if an object is included in another object or a list of objects. An `ArgumentError` exception will be raised if a single argument is passed and it does not respond to `include?`.
+Le prédicat `in?` teste si un objet est inclus dans un autre objet ou une liste d'objets. Une exception de type `ArgumentError` sera levée si un seul argument est passé et que ce dernier ne répond pas à `include?`.
 
-Examples of `in?`:
+Exemples de `in?`:
 
 ```ruby
 1.in?(1,2)          # => true
@@ -488,7 +487,7 @@ Examples of `in?`:
 1.in?(1)            # => ArgumentError
 ```
 
-NOTE: Defined in `active_support/core_ext/object/inclusion.rb`.
+NOTE: Définie dans `active_support/core_ext/object/inclusion.rb`.
 
 Extensions to `Module`
 ----------------------
