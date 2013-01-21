@@ -75,7 +75,7 @@ Cela ne charge cependant pas tout Active Support en mémoire. En effet, certaine
 
 ### Active Support dans une application Ruby on Rails
 
-Une application Ruby on Rails charge tout Active Support à moins que `config.active_support.bare` soit à `true`. Dans ce cas, l'application ne charge que ce que le framework séléctionne lui-même, pour ses propres besoins, et peut charger le reste elle-même à n'importe quel niveau de granularité.
+Une application Ruby on Rails charge tout Active Support à moins que `config.active_support.bare` soit à `true`. Dans ce cas, l'application ne charge que ce dont le framework a besoin tout en conservant la possibilité de charger le reste, à n'importe quel niveau de granularité.
 
 Extensions apportées à tous les Objets
 --------------------------------------
