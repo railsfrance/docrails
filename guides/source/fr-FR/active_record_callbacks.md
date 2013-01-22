@@ -1,32 +1,30 @@
 Active Record Callbacks
 =======================
+Ce guide va vous apprendre comment intervenir dans le cycle de vie de vos objets Active Record.
 
-This guide teaches you how to hook into the life cycle of your Active Record
-objects.
+Après avoir lu ce guide, vous connaîtrez :
 
-After reading this guide, you will know:
-
-* The life cycle of Active Record objects.
-* How to create callback methods that respond to events in the object life cycle.
-* How to create special classes that encapsulate common behavior for your callbacks.
+* Le cycle de vie des objets Active Record.
+* Comment créer des méthodes qui seront appelées lors d'évènements arrivant dans le cycle de vie d'un object Active Record.
+* Comment créer des classes spéciales qui encapsuleront des comportements génériques pour vos callbacks.
 
 --------------------------------------------------------------------------------
 
-The Object Life Cycle
----------------------
+Le Cycle de Vie d'un Object
+---------------------------
 
-During the normal operation of a Rails application, objects may be created, updated, and destroyed. Active Record provides hooks into this <em>object life cycle</em> so that you can control your application and its data.
+Lors du fonctionnement normal d'une application Rails, des objets peuvent être crées, mis à jour et détruits. Active Record vous permet d'intervenir lors du <em>cycle de vie de l'objet</em> afin de pouvoir contrôler votre application et ses données.
 
-Callbacks allow you to trigger logic before or after an alteration of an object's state.
+Les Callbacks vous permettent de déclencher de la logique métier avant ou après l'alteration de l'état d'un objet.
 
-Callbacks Overview
-------------------
+Qu'est-ce que Les Callbacks ?
+-----------------------------
 
-Callbacks are methods that get called at certain moments of an object's life cycle. With callbacks it is possible to write code that will run whenever an Active Record object is created, saved, updated, deleted, validated, or loaded from the database.
+Les Callbacks sont des méthodes qui sont appelées à certains moments du cycle de vie d'un objet. Avec les Callbacks, il est possible d'écrire du code qui sera executé lorsqu'un objet Active Record sera créé, sauvegardé, mis à jour, supprimé, validé ou chargé depuis la base de données.
 
-### Callback Registration
+### Enregistrement d'une Callback
 
-In order to use the available callbacks, you need to register them. You can implement the callbacks as ordinary methods and use a macro-style class method to register them as callbacks:
+Afin d'utiliser une Callback, vous devez d'abord l'enregistrer. Vous pouvez implenter une méthode de Callback soit de façon classique via une méthode Ruby, soit en utilisant une méthode de classe dite "macro".
 
 ```ruby
 class User < ActiveRecord::Base
@@ -43,7 +41,7 @@ class User < ActiveRecord::Base
 end
 ```
 
-The macro-style class methods can also receive a block. Consider using this style if the code inside your block is so short that it fits in a single line:
+Les méthodes de classe dites "macro" peuvent aussi recevoir un bloc. Vous devriez uniquement utiliser cette méthode si le contenu de votre bloc ne dépasse pas une ligne.
 
 ```ruby
 class User < ActiveRecord::Base
@@ -55,13 +53,13 @@ class User < ActiveRecord::Base
 end
 ```
 
-Callbacks can also be registered to only fire on certain lifecycle events:
+Les Callbacks peuvent aussi être enregistrée afin de ne s'exécuter qu'à certains moments du cycle de vie d'un objet.
 
 ```ruby
 class User < ActiveRecord::Base
   before_validation :normalize_name, on: :create
 
-  # :on takes an array as well
+  # :on Peut aussi recevoir un tableau.
   after_validation :set_location, on: [ :create, :update ]
 
   protected
@@ -75,14 +73,14 @@ class User < ActiveRecord::Base
 end
 ```
 
-It is considered good practice to declare callback methods as protected or private. If left public, they can be called from outside of the model and violate the principle of object encapsulation.
+Il est consideré comme une bonne pratique de déclarer les méthodes de callback comme privées ou protégées. Si ces méthodes sont laissées publiques, elles peuvent être appelées hors du modèle et violent ainsi le principe d'encapsulation d'objet.
 
-Available Callbacks
--------------------
+Les Callbacks disponibles
+-------------------------
 
-Here is a list with all the available Active Record callbacks, listed in the same order in which they will get called during the respective operations:
+Voici une liste de toutes les Callbacks Active Record disponibles, listées par leur ordre d'execution :
 
-### Creating an Object
+### Création d'un Objet
 
 * `before_validation`
 * `after_validation`
@@ -93,7 +91,7 @@ Here is a list with all the available Active Record callbacks, listed in the sam
 * `after_create`
 * `after_save`
 
-### Updating an Object
+### Mise à jour d'un Objet
 
 * `before_validation`
 * `after_validation`
@@ -104,7 +102,7 @@ Here is a list with all the available Active Record callbacks, listed in the sam
 * `after_update`
 * `after_save`
 
-### Destroying an Object
+### Destruction d'un Objet
 
 * `before_destroy`
 * `around_destroy`
