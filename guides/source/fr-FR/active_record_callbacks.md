@@ -1,4 +1,4 @@
-Les méthodes de callback d'ActiveRecord
+Les méthodes de callback d'Active Record
 =======================================
 Ce guide va vous apprendre comment intervenir dans le cycle de vie de vos objets Active Record.
 
