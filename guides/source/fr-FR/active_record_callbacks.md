@@ -3,8 +3,8 @@ Les méthodes de callback d'Active Record
 Ce guide va vous apprendre comment intervenir dans le cycle de vie de vos objets Active Record.
 
 Après avoir lu ce guide, vous connaîtrez :
-* Le cycle de vie des objets Active Record.
-* Comment créer des méthodes qui seront appelées lors d'évènements arrivant durant le cycle de vie d'un object Active Record.
+* Le cycle de vie des objets Active Record ;
+* Comment créer des méthodes qui seront appelées lors d'évènements arrivant durant le cycle de vie d'un object Active Record ;
 * Comment créer des classes spéciales qui encapsuleront des comportements génériques pour vos callbacks.
 
 --------------------------------------------------------------------------------
@@ -16,8 +16,8 @@ Lors du fonctionnement normal d'une application Rails, des objets peuvent être 
 
 Les méthodes de Callback vous permettent d'exécuter de la logique métier avant ou après l'alteration de l'état d'un objet.
 
-Qu'est-ce que les Méthodes de callback ?
----------------------------------------
+Que sont les Méthodes de callback ?
+-----------------------------------
 
 Les méthodes de callback sont des méthodes qui sont appelées à certains moments dans le cycle de vie d'un objet. Avec les méthodes de callback, il est possible d'écrire du code qui sera executé lorsqu'un objet Active Record sera créé, sauvegardé, mis à jour, supprimé, validé ou chargé depuis la base de données.
 
@@ -107,41 +107,41 @@ Voici une liste de toutes les Méthodes de callback Active Record disponibles, l
 * `around_destroy`
 * `after_destroy`
 
-WARNING. `after_save` runs both on create and update, but always _after_ the more specific callbacks `after_create` and `after_update`, no matter the order in which the macro calls were executed.
+ATTENTION. `after_save` s'exécute à la création ***et*** à la mise à jour, mais toujours _après_ les méthodes de callback plus spécifiques `after_create` et `after_update`, peu importe l'ordre dans lequel les méthodes ont été déclarées.
 
-### `after_initialize` and `after_find`
+### `after_initialize` et `after_find`
 
-The `after_initialize` callback will be called whenever an Active Record object is instantiated, either by directly using `new` or when a record is loaded from the database. It can be useful to avoid the need to directly override your Active Record `initialize` method.
+La méthode de callback `after_initialize` sera appelée à chaque instanciation d'un objet Active Record, soit en utilisant directement `new` ou quand un enregistrement est chargé depuis la base de données. Cela peut-être utile afin d'éviter d'outrepasser la méthode `initialize` d'un objet Active Record.
 
-The `after_find` callback will be called whenever Active Record loads a record from the database. `after_find` is called before `after_initialize` if both are defined.
+La méthode de callback `after_find` sera appelée à chaque fois qu'Active Record charge un enregistrement depuis la base de données. Elle sera appelée avant la méthode `after_initialize` si ces deux dernières sont definies.
 
-The `after_initialize` and `after_find` callbacks have no `before_*` counterparts, but they can be registered just like the other Active Record callbacks.
+Les méthodes `after_initialize` et `after_find` n'ont pas d'équivalents `before_*` mais peuvent être enregistrées comme n'importe quelle méthode de callback Active Record.
 
 ```ruby
 class User < ActiveRecord::Base
   after_initialize do |user|
-    puts "You have initialized an object!"
+    puts "Vous avez initialisé un objet !"
   end
 
   after_find do |user|
-    puts "You have found an object!"
+    puts "Vous avez trouvé un objet !"
   end
 end
 
 >> User.new
-You have initialized an object!
+Vous avez initialisé un objet !
 => #<User id: nil>
 
 >> User.first
-You have found an object!
-You have initialized an object!
+Vous avez trouvé un objet !
+Vous avez initialisé un objet !
 => #<User id: 1>
 ```
 
-Running Callbacks
------------------
+Exécuter les méthodes de callback
+---------------------------------
 
-The following methods trigger callbacks:
+Les méthodes suivantes déclenchent l'exécution des méthodes de callback :
 
 * `create`
 * `create!`
@@ -160,7 +160,7 @@ The following methods trigger callbacks:
 * `update_attributes!`
 * `valid?`
 
-Additionally, the `after_find` callback is triggered by the following finder methods:
+De plus, la méthode de callback `after_find` est exécutée par les méthodes suivantes :
 
 * `all`
 * `first`
@@ -170,9 +170,9 @@ Additionally, the `after_find` callback is triggered by the following finder met
 * `find_by_sql`
 * `last`
 
-The `after_initialize` callback is triggered every time a new object of the class is initialized.
+La méthode de callback `after_initialize` est exécutée à chaque fois qu'un nouvel objet de la classe est initialisé.
 
-NOTE: The `find_by_*` and `find_by_*!` methods are dynamic finders generated automatically for every attribute. Learn more about them at the [Dynamic finders section](active_record_querying.html#dynamic-finders)
+NOTE: Les méthodes `find_by_*` et `find_by_*!` sont des méthodes de recherche dynamiques génerées automatiquement pour chaque attributs de l'objet. Vous pouvez en apprendre plus sur ces méthodes de recherche dynamiques en cliquant [ICI](active_record_querying.html#dynamic-finders)
 
 Skipping Callbacks
 ------------------
