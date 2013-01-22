@@ -1,30 +1,29 @@
-Active Record Callbacks
-=======================
+Les méthodes de callback d'ActiveRecord
+=======================================
 Ce guide va vous apprendre comment intervenir dans le cycle de vie de vos objets Active Record.
 
 Après avoir lu ce guide, vous connaîtrez :
-
 * Le cycle de vie des objets Active Record.
-* Comment créer des méthodes qui seront appelées lors d'évènements arrivant dans le cycle de vie d'un object Active Record.
+* Comment créer des méthodes qui seront appelées lors d'évènements arrivant durant le cycle de vie d'un object Active Record.
 * Comment créer des classes spéciales qui encapsuleront des comportements génériques pour vos callbacks.
 
 --------------------------------------------------------------------------------
 
-Le Cycle de Vie d'un Object
+Le Cycle de vie d'un Objet
 ---------------------------
 
 Lors du fonctionnement normal d'une application Rails, des objets peuvent être crées, mis à jour et détruits. Active Record vous permet d'intervenir lors du <em>cycle de vie de l'objet</em> afin de pouvoir contrôler votre application et ses données.
 
-Les Callbacks vous permettent de déclencher de la logique métier avant ou après l'alteration de l'état d'un objet.
+Les méthodes de Callback vous permettent d'exécuter de la logique métier avant ou après l'alteration de l'état d'un objet.
 
-Qu'est-ce que Les Callbacks ?
------------------------------
+Qu'est-ce que les Méthodes de callback ?
+---------------------------------------
 
-Les Callbacks sont des méthodes qui sont appelées à certains moments du cycle de vie d'un objet. Avec les Callbacks, il est possible d'écrire du code qui sera executé lorsqu'un objet Active Record sera créé, sauvegardé, mis à jour, supprimé, validé ou chargé depuis la base de données.
+Les méthodes de callback sont des méthodes qui sont appelées à certains moments dans le cycle de vie d'un objet. Avec les méthodes de callback, il est possible d'écrire du code qui sera executé lorsqu'un objet Active Record sera créé, sauvegardé, mis à jour, supprimé, validé ou chargé depuis la base de données.
 
-### Enregistrement d'une Callback
+### Enregistrement d'une Méthode de callback
 
-Afin d'utiliser une Callback, vous devez d'abord l'enregistrer. Vous pouvez implenter une méthode de Callback soit de façon classique via une méthode Ruby, soit en utilisant une méthode de classe dite "macro".
+Afin d'utiliser une méthode de callback, vous devez d'abord l'enregistrer. Vous pouvez enregistrer une méthode de callback soit de façon classique via une méthode d'instance, soit en utilisant une méthode de classe dite "macro".
 
 ```ruby
 class User < ActiveRecord::Base
@@ -53,7 +52,7 @@ class User < ActiveRecord::Base
 end
 ```
 
-Les Callbacks peuvent aussi être enregistrée afin de ne s'exécuter qu'à certains moments du cycle de vie d'un objet.
+Les méthodes de callback peuvent aussi être enregistrées afin de ne s'exécuter qu'à certains moments dans le cycle de vie d'un objet.
 
 ```ruby
 class User < ActiveRecord::Base
@@ -73,12 +72,12 @@ class User < ActiveRecord::Base
 end
 ```
 
-Il est consideré comme une bonne pratique de déclarer les méthodes de callback comme privées ou protégées. Si ces méthodes sont laissées publiques, elles peuvent être appelées hors du modèle et violent ainsi le principe d'encapsulation d'objet.
+Il est consideré comme une bonne pratique de déclarer les méthodes de callback comme privées ou protégées. Si ces méthodes sont laissées publiques, elles peuvent être appelées hors du modèle et violent ainsi le principe d'encapsulation objet.
 
-Les Callbacks disponibles
--------------------------
+Les Méthodes de Callback disponibles
+------------------------------------
 
-Voici une liste de toutes les Callbacks Active Record disponibles, listées par leur ordre d'execution :
+Voici une liste de toutes les Méthodes de callback Active Record disponibles, listées par leur ordre d'exécution :
 
 ### Création d'un Objet
 
