@@ -1,4 +1,4 @@
-Vue d'ensemble d'Action Controller
+Vue d'ensemble d'_Action Controller_
 ==================================
 
 Dans ce guide, vous allez apprendre comment les contrôleurs
@@ -11,7 +11,7 @@ Après avoir lu ce guide, vous saurez :
 cookies.
 * Comment travailler avec les filtres pour exécuter du code pendant le
 traitement de la requête.
-* Comment utiliser l'authentification HTTP avec Action Controller.
+* Comment utiliser l'authentification HTTP avec _Action Controller_.
 * Comment envoyer en continue des données au navigateur.
 * Comment filtrer les paramètres sensible pour ne pas qu'ils apparaissent
 dans les logs
@@ -23,10 +23,10 @@ de la requête.
 Que fait le contrôleur ?
 --------------------------
 
-Action Controller est le C dans MVC. Après que le routeur ai déterminé
+_Action Controller_ est le C dans MVC. Après que le routeur ai déterminé
 quel contrôleur utiliser pour une requête, votre contrôleur doit faire
 le nécessaire pour sortir un résultat en lien avec la requête. Par
-chance, Action Controller fait le travail de base et utilise des
+chance, _Action Controller_ fait le travail de base et utilise des
 conventions intelligentes pour le rendre le plus simple et rapide que
 possible.
 
