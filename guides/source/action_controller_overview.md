@@ -45,10 +45,14 @@ provenant de l'utilisateur.
 
 Pour plus de détails sur le fonctionnement du routeur : [Rails Routing from the Outside In](routing.html).
 
-Methods and Actions
+Méthodes et Actions
 -------------------
 
-A controller is a Ruby class which inherits from `ApplicationController` and has methods just like any other class. When your application receives a request, the routing will determine which controller and action to run, then Rails creates an instance of that controller and runs the method with the same name as the action.
+Un contrôleur est une classe Ruby qui hérite d'`ApplicationController` et
+a des méthodes comme tout autre classe. Quand votre application reçoit
+une demande, le routeur déterminera quel contrôleur et action
+exécuter, puis Rails créé une instance de ce contrôleur et appel la
+méthodes qui à le même nom l'action.
 
 ```ruby
 class ClientsController < ApplicationController
@@ -57,7 +61,13 @@ class ClientsController < ApplicationController
 end
 ```
 
-As an example, if a user goes to `/clients/new` in your application to add a new client, Rails will create an instance of `ClientsController` and run the `new` method. Note that the empty method from the example above could work just fine because Rails will by default render the `new.html.erb` view unless the action says otherwise. The `new` method could make available to the view a `@client` instance variable by creating a new `Client`:
+Pour exemple, si un utilisateur va vers `/clients/new` dans notre
+application pour ajouter un nouveau client, Rails créera une instance de
+`ClientsController` et appellera la méthode `new`. Notez bien que la méthode
+vide utilisée dans l'exemple fonctionne car Rails rendra par défaut
+la vue `new.html.erb` sauf si l'action dit de faire différemment. La
+méthode `new` peut rendre visible pour la vue la variable d'instance
+`@client` en créant un nouveau `Client` :
 
 ```ruby
 def new
@@ -65,24 +75,41 @@ def new
 end
 ```
 
-The [Layouts & Rendering Guide](layouts_and_rendering.html) explains this in more detail.
+Le [Layouts & Rendering Guide](layouts_and_rendering.html) explique ce
+principe plus en détail.
 
-`ApplicationController` inherits from `ActionController::Base`, which defines a number of helpful methods. This guide will cover some of these, but if you're curious to see what's in there, you can see all of them in the API documentation or in the source itself.
+`ApplicationController` hérite d'`ActionController::Base` qui définis
+un certain nombre de méthodes bien utile. Ce guide reviendra sur certaines
+d'entre elles, mais si vous êtes curieux de voir ce qu'elles font,
+vous pouvez toutes les retrouver dans la documentation de l'API ou dans
+les sources.
 
-Only public methods are callable as actions. It is a best practice to lower the visibility of methods which are not intended to be actions, like auxiliary methods or filters.
+Seulement les méthodes publique sont appelées en tant qu'actions. C'est
+une bonne pratique de restreindre la visibilité des méthodes qui ne sont
+pas des actions, comme les méthodes auxiliaires ou les filtres.
 
-Parameters
+Les Paramètres
 ----------
 
-You will probably want to access data sent in by the user or other parameters in your controller actions. There are two kinds of parameters possible in a web application. The first are parameters that are sent as part of the URL, called query string parameters. The query string is everything after "?" in the URL. The second type of parameter is usually referred to as POST data. This information usually comes from an HTML form which has been filled in by the user. It's called POST data because it can only be sent as part of an HTTP POST request. Rails does not make any distinction between query string parameters and POST parameters, and both are available in the `params` hash in your controller:
+Vous voudrez surement accéder aux données envoyées par l'utilisateur ou
+à d'autres paramètres présent dans le contrôleur. Il y a deux types de
+paramètre possible dans une application web. Les premiers sont les
+paramètres qui font partis de l'URL, appelé _query string parameters_. les  _query
+string parameters_ sont tout ce qui se trouve après le "?" dans l'URL. Le second
+type de paramètre fait référence aux données envoyées par la
+méthode "POST". Cet information vient le plus souvent d'un envoie de
+formulaire html qui a été remplis par l'utilisateur. C'est appelé "POST"
+car cela peut uniquement être envoyé en tant que partis d'une requête
+"HTTP POST". Rails ne fait pas de distinction entre les _query string
+parameters_ et les _POST parameters_, les deux sont disponible dans
+le Hash `params` de votre contrôleur:
 
 ```ruby
 class ClientsController < ActionController::Base
-  # This action uses query string parameters because it gets run
-  # by an HTTP GET request, but this does not make any difference
-  # to the way in which the parameters are accessed. The URL for
-  # this action would look like this in order to list activated
-  # clients: /clients?status=activated
+  # Cet action utilise des query string parameters car elles ont été
+  # envoyé par une requête HTTP de type GET, mais cela ne fait aucune
+  # différence en ce qui concerne leur accès. L'URL pour cette action
+  # semble vouloir afficher la liste des clients activé
   def index
     if params[:status] == "activated"
       @clients = Client.activated
@@ -91,17 +118,17 @@ class ClientsController < ActionController::Base
     end
   end
 
-  # This action uses POST parameters. They are most likely coming
-  # from an HTML form which the user has submitted. The URL for
-  # this RESTful request will be "/clients", and the data will be
-  # sent as part of the request body.
+  # Cette action utilise les paramètres de type POST. Ils viennent le
+  # plus souvent d'un formulaire HTML que l'utilisateur à envoyé. l'URL pour
+  # cette requête de type REST est "/clients", et les données seront
+  # envoyées dans le corps de la requête.
   def create
     @client = Client.new(params[:client])
     if @client.save
       redirect_to @client
     else
-      # This line overrides the default rendering behavior, which
-      # would have been to render the "create" view.
+      # Cette ligne modifie le comportement de rendu par défaut,
+      # qui normalement était le rendu de la vue "create".
       render "new"
     end
   end
