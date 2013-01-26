@@ -55,7 +55,7 @@ Seules les méthodes publiques sont appelées en tant qu'actions. C'est une bonn
 Les Paramètres
 ----------
 
-Vous voudrez surement accéder aux données envoyées par l'utilisateur ou à d'autres paramètres présents dans le contrôleur. Il y a deux types de paramètres possible dans une application web. Les premiers sont les paramètres qui font partie de l'URL, appelé paramètres de _query string_. les  _query string parameters_ sont tout ce qui se trouve après le "?" dans l'URL. Le second type de paramètre fait référence aux données envoyées par la méthode "POST". Cette information vient le plus souvent d'un envoi de formulaire HTML qui a été rempli par l'utilisateur. C'est appelé "POST" car cela peut uniquement être envoyé en tant que partie d'une requête HTTP de type "POST". Rails ne fait pas de distinction entre les paramètres de _query string_ et les _POST parameters_, les deux sont disponibles dans le Hash `params` de votre contrôleur :
+Vous voudrez surement accéder aux données envoyées par l'utilisateur ou à d'autres paramètres présents dans le contrôleur. Il y a deux types de paramètres possible dans une application web. Les premiers sont les paramètres qui font partie de l'URL, appelé paramètres de _query string_. les  _query string parameters_ sont tout ce qui se trouve après le "?" dans l'URL. Le second type de paramètre fait référence aux données envoyées par la méthode "POST". Cette information vient le plus souvent d'un envoi de formulaire HTML qui a été rempli par l'utilisateur. C'est appelé "POST" car cela peut uniquement être envoyé en tant que partie d'une requête HTTP de type "POST". Rails ne fait pas de distinction entre les paramètres de _query string_ et les _POST parameters_, les deux sont disponibles dans le hash `params` de votre contrôleur :
 
 ```ruby
 class ClientsController < ActionController::Base
@@ -89,19 +89,19 @@ class ClientsController < ActionController::Base
 end
 ```
 
-### Hash and Array Parameters
+### Paramètres de type `Hash` et `Array`
 
-The `params` hash is not limited to one-dimensional keys and values. It can contain arrays and (nested) hashes. To send an array of values, append an empty pair of square brackets "[]" to the key name:
+les `params` de type hash ne sont pas limités aux clefs et valeurs à une dimension. Il peuvent contenir des tableaux et des hashs imbriqués. Pour envoyer un tableau de valeur, ajoutez une paire de crochets vide "[]" après le nom de la clef :
 
 ```
 GET /clients?ids[]=1&ids[]=2&ids[]=3
 ```
 
-NOTE: The actual URL in this example will be encoded as "/clients?ids%5b%5d=1&ids%5b%5d=2&ids%5b%5d=3" as "[" and "]" are not allowed in URLs. Most of the time you don't have to worry about this because the browser will take care of it for you, and Rails will decode it back when it receives it, but if you ever find yourself having to send those requests to the server manually you have to keep this in mind.
+À Noter : en réalité l'URL de cet exemple serait encodé comme ceci "/clients?ids%5b%5d=1&ids%5b%5d=2&ids%5b%5d=3" car "[" et "]" ne sont pas autorisés dans les URL. La plupart du temps il est inutile de s'inquiéter à propos de ça car le navigateur s'en charge pour vous, et Rails le décodera en retour quand il le recevra, mais si jamais vous avez besoin d'envoyer ces requêtes manuellement à un serveur vous devez avoir ça en tête.
 
-The value of `params[:ids]` will now be `["1", "2", "3"]`. Note that parameter values are always strings; Rails makes no attempt to guess or cast the type.
+La valeur du `params[:ids]` sera maintenant `["1", "2", "3"]`. À noter que les valeurs de paramètres sont toujours du type `String` ; Rails ne fait rien pour deviner ou caster le type.
 
-To send a hash you include the key name inside the brackets:
+Pour envoyer un hash vous devez inclure le nom de la clef dans les crochets :
 
 ```html
 <form accept-charset="UTF-8" action="/clients" method="post">
@@ -112,35 +112,35 @@ To send a hash you include the key name inside the brackets:
 </form>
 ```
 
-When this form is submitted, the value of `params[:client]` will be `{"name" => "Acme", "phone" => "12345", "address" => {"postcode" => "12345", "city" => "Carrot City"}}`. Note the nested hash in `params[:client][:address]`.
+Quand ce formulaire est envoyé, la valeur de `params[:client]` serait `{"name" => "Acme", "phone" => "12345", "address" => {"postcode" => "12345", "city" => "Carrot City"}}`. Notez le hash imbriqué dans `params[:client][:address]`.
 
-Note that the `params` hash is actually an instance of `HashWithIndifferentAccess` from Active Support, which acts like a hash that lets you use symbols and strings interchangeably as keys.
+Remarquez que le `params` de type hash est en réalité une instance de `HashWithIndifferentAccess` d'Active Support, qui se comporte comme un hash et vous laisse utiliser des symboles ou des chaines de caractères indifféremment comme clefs.
 
-### JSON/XML parameters
+### paramètres au format JSON/XML 
 
-If you're writing a web service application, you might find yourself more comfortable on accepting parameters in JSON or XML format. Rails will automatically convert your parameters into `params` hash, which you'll be able to access like you would normally do with form data.
+Si vous écrivez une application web, vous pourriez vous retrouver plus à l'aise d'accepter des paramètres aux format JSON ou XML. Rails convertira automatiquement vos paramètres en `params` de type hash, que vous pourrez accéder comme vous le feriez avec des données d'un formulaire.
 
-So for example, if you are sending this JSON parameter:
+Donc pour exemple, si vous envoyez ces paramètres JSON :
 
 ```json
 { "company": { "name": "acme", "address": "123 Carrot Street" } }
 ```
 
-You'll get `params[:company]` as `{ :name => "acme", "address" => "123 Carrot Street" }`.
+Vous aurez `params[:company]` qui donnera `{ :name => "acme", "address" => "123 Carrot Street" }`.
 
-Also, if you've turned on `config.wrap_parameters` in your initializer or calling `wrap_parameters` in your controller, you can safely omit the root element in the JSON/XML parameter. The parameters will be cloned and wrapped in the key according to your controller's name by default. So the above parameter can be written as:
+Aussi, si vous activez `config.wrap_parameters` dans votre initialisation ou appelez `wrap_parameters` dans votre contrôleurs, vous pouvez omettre en toute sécurité l'élément racine dans le paramètre au format JSON/XML. Les paramètres seront clonés et entouré de la clef selon le nom du contrôleur par défaut. Donc le paramètre suivant peut être écrit comme ceci :
 
 ```json
 { "name": "acme", "address": "123 Carrot Street" }
 ```
 
-And assume that you're sending the data to `CompaniesController`, it would then be wrapped in `:company` key like this:
+Et supposons que vous envoyez les données à `CompaniesController`, il serait alors enveloppé dans la clef `:company` comme ceci :
 
 ```ruby
 { :name => "acme", :address => "123 Carrot Street", :company => { :name => "acme", :address => "123 Carrot Street" }}
 ```
 
-You can customize the name of the key or specific parameters you want to wrap by consulting the [API documentation](http://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html)
+Vous pouvez personnaliser le nom de la clef ou des paramètres spécifiques que vous voulez envelopper en consultant la [documentation de l'API](http://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html)
 
 ### Routing Parameters
 
