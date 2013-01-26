@@ -5,12 +5,12 @@ Dans ce guide, vous allez apprendre comment les contrôleurs fonctionnent et com
 
 Après avoir lu ce guide, vous saurez :
 
-* Comment suivre le parcours d'une requête à travers un contrôleur ;
-* Pourquoi et comment enregistrer des données en session ou dans les cookies ;
-* Comment travailler avec les filtres pour exécuter du code pendant le traitement de la requête ;
-* Comment utiliser l'authentification HTTP avec _Action Controller_ ;
-* Comment envoyer en continue des données au navigateur ;
-* Comment filtrer les paramètres sensibles pour ne pas qu'ils apparaissent dans les logs ;
+* Comment suivre le parcours d'une requête à travers un contrôleur ;
+* Pourquoi et comment enregistrer des données en session ou dans les cookies ;
+* Comment travailler avec les filtres pour exécuter du code pendant le traitement de la requête ;
+* Comment utiliser l'authentification HTTP avec _Action Controller_ ;
+* Comment envoyer en continue des données au navigateur ;
+* Comment filtrer les paramètres sensibles pour ne pas qu'ils apparaissent dans les logs ;
 * Comment traiter les exceptions qui seraient levées durant le traitement de la requête.
 
 --------------------------------------------------------------------------------
