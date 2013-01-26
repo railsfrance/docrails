@@ -1,58 +1,35 @@
 Vue d'ensemble d'_Action Controller_
 ==================================
 
-Dans ce guide, vous allez apprendre comment les contrôleurs
-fonctionnent et comment s'en servir dans le cycle de votre application.
+Dans ce guide, vous allez apprendre comment les contrôleurs fonctionnent et comment s'en servir dans le cycle de votre application.
 
-Après avoir lu ce guide, vous saurez :
+Après avoir lu ce guide, vous saurez :
 
-* Comment suivre le chemin d'une requête à travers le contrôleur.
-* Pourquoi et comment enregistrer des données dans des sessions ou
-cookies.
-* Comment travailler avec les filtres pour exécuter du code pendant le
-traitement de la requête.
-* Comment utiliser l'authentification HTTP avec _Action Controller_.
-* Comment envoyer en continue des données au navigateur.
-* Comment filtrer les paramètres sensible pour ne pas qu'ils apparaissent
-dans les logs
-* Comment traiter les exceptions qui serait levées durant le traitement
-de la requête.
+* Comment suivre le parcours d'une requête à travers un contrôleur ;
+* Pourquoi et comment enregistrer des données en session ou dans les cookies ;
+* Comment travailler avec les filtres pour exécuter du code pendant le traitement de la requête ;
+* Comment utiliser l'authentification HTTP avec _Action Controller_ ;
+* Comment envoyer en continue des données au navigateur ;
+* Comment filtrer les paramètres sensibles pour ne pas qu'ils apparaissent dans les logs ;
+* Comment traiter les exceptions qui seraient levées durant le traitement de la requête.
 
 --------------------------------------------------------------------------------
 
-Que fait le contrôleur ?
+Que fait un contrôleur ?
 --------------------------
 
-_Action Controller_ est le C dans MVC. Après que le routeur ai déterminé
-quel contrôleur utiliser pour une requête, votre contrôleur doit faire
-le nécessaire pour sortir un résultat en lien avec la requête. Par
-chance, _Action Controller_ fait le travail de base et utilise des
-conventions intelligentes pour le rendre le plus simple et rapide que
-possible.
+_Action Controller_ est le C dans MVC. Après que le routage ait déterminé quel contrôleur utiliser pour une requête, votre contrôleur doit faire le nécessaire pour sortir un résultat en lien avec la requête. Par chance, _Action Controller_ fait le travail de base et utilise des conventions intelligentes pour rendre le reste le plus simple et rapide que possible.
 
-Pour les applications de type
-[RESTful](http://fr.wikipedia.org/wiki/Representational_State_Transfer),
-le contrôleur reçoit la requête (c'est invisible pour les développeurs),
-récupère ou sauvegarde les données du modèle et utilise la vue pour
-générer le html. Si votre contrôleur à besoin de faire les choses un
-peu différemment, ce n'est pas un problème, c'est juste la façon la plus
-conventionnelle pour le contrôleur de travailler.
+Pour les applications de type [RESTful](http://fr.wikipedia.org/wiki/Representational_State_Transfer), le contrôleur reçoit la requête (c'est invisible pour les développeurs), récupère ou sauvegarde les données du modèle et utilise la vue pour générer le HTML. Si votre contrôleur a besoin de faire les choses un peu différemment, ce n'est pas un problème, c'est juste la façon la plus conventionnelle pour le contrôleur de travailler.
 
-Un contrôleur fait le lien entre les modèles et les vues. Il rend
-disponible les données du modèle pour la vue, ce qui nous permet de les
-afficher, puis il enregistre ou met à jour les données du modèle
-provenant de l'utilisateur.
+Un contrôleur fait le lien entre les modèles et les vues. Il rend disponibles les données du modèle pour la vue, ce qui nous permet de les afficher, puis il enregistre ou met à jour le modèle avec les données fournies par l'utilisateur.
 
-Pour plus de détails sur le fonctionnement du routeur : [Rails Routing from the Outside In](routing.html).
+Pour plus de détails sur le fonctionnement du routage : [Rails Routing from the Outside In](routing.html).
 
 Méthodes et Actions
 -------------------
 
-Un contrôleur est une classe Ruby qui hérite d'`ApplicationController` et
-a des méthodes comme tout autre classe. Quand votre application reçoit
-une demande, le routeur déterminera quel contrôleur et action
-exécuter, puis Rails créé une instance de ce contrôleur et appel la
-méthodes qui à le même nom l'action.
+Un contrôleur est une classe Ruby qui hérite de `ApplicationController` et a des méthodes comme tout autre classe. Quand votre application reçoit une demande, le routage déterminera quel contrôleur et action exécuter, puis Rails crée une instance de ce contrôleur et appelle la méthode qui a le même nom que l'action.
 
 ```ruby
 class ClientsController < ApplicationController
@@ -61,13 +38,7 @@ class ClientsController < ApplicationController
 end
 ```
 
-Pour exemple, si un utilisateur va vers `/clients/new` dans notre
-application pour ajouter un nouveau client, Rails créera une instance de
-`ClientsController` et appellera la méthode `new`. Notez bien que la méthode
-vide utilisée dans l'exemple fonctionne car Rails rendra par défaut
-la vue `new.html.erb` sauf si l'action dit de faire différemment. La
-méthode `new` peut rendre visible pour la vue la variable d'instance
-`@client` en créant un nouveau `Client` :
+Pour exemple, si un utilisateur va vers `/clients/new` dans notre application pour ajouter un nouveau client, Rails créera une instance de `ClientsController` et appellera la méthode `new`. Notez bien que la méthode vide utilisée dans l'exemple fonctionne car Rails rendra par défaut la vue `new.html.erb` sauf si l'action dit de faire différemment. La méthode `new` pourrait rendre visible pour la vue la variable d'instance `@client` en créant un nouveau `Client` :
 
 ```ruby
 def new
@@ -75,41 +46,24 @@ def new
 end
 ```
 
-Le [Layouts & Rendering Guide](layouts_and_rendering.html) explique ce
-principe plus en détail.
+Le [Layouts & Rendering Guide](layouts_and_rendering.html) explique ce principe plus en détail.
 
-`ApplicationController` hérite d'`ActionController::Base` qui définis
-un certain nombre de méthodes bien utile. Ce guide reviendra sur certaines
-d'entre elles, mais si vous êtes curieux de voir ce qu'elles font,
-vous pouvez toutes les retrouver dans la documentation de l'API ou dans
-les sources.
+`ApplicationController` hérite de `ActionController::Base` qui définit un certain nombre de méthodes bien utiles. Ce guide reviendra sur certaines d'entre elles, mais si vous êtes curieux de voir ce qu'elles font, vous pouvez toutes les retrouver dans la documentation de l'API ou dans les sources.
 
-Seulement les méthodes publique sont appelées en tant qu'actions. C'est
-une bonne pratique de restreindre la visibilité des méthodes qui ne sont
-pas des actions, comme les méthodes auxiliaires ou les filtres.
+Seules les méthodes publiques sont appelées en tant qu'actions. C'est une bonne pratique de restreindre la visibilité des méthodes qui ne sont pas des actions, comme les méthodes auxiliaires ou les filtres.
 
 Les Paramètres
 ----------
 
-Vous voudrez surement accéder aux données envoyées par l'utilisateur ou
-à d'autres paramètres présent dans le contrôleur. Il y a deux types de
-paramètre possible dans une application web. Les premiers sont les
-paramètres qui font partis de l'URL, appelé _query string parameters_. les  _query
-string parameters_ sont tout ce qui se trouve après le "?" dans l'URL. Le second
-type de paramètre fait référence aux données envoyées par la
-méthode "POST". Cet information vient le plus souvent d'un envoie de
-formulaire html qui a été remplis par l'utilisateur. C'est appelé "POST"
-car cela peut uniquement être envoyé en tant que partis d'une requête
-"HTTP POST". Rails ne fait pas de distinction entre les _query string
-parameters_ et les _POST parameters_, les deux sont disponible dans
-le Hash `params` de votre contrôleur:
+Vous voudrez surement accéder aux données envoyées par l'utilisateur ou à d'autres paramètres présents dans le contrôleur. Il y a deux types de paramètres possible dans une application web. Les premiers sont les paramètres qui font partie de l'URL, appelé paramètres de _query string_. les  _query string parameters_ sont tout ce qui se trouve après le "?" dans l'URL. Le second type de paramètre fait référence aux données envoyées par la méthode "POST". Cette information vient le plus souvent d'un envoi de formulaire HTML qui a été rempli par l'utilisateur. C'est appelé "POST" car cela peut uniquement être envoyé en tant que partie d'une requête HTTP de type "POST". Rails ne fait pas de distinction entre les paramètres de _query string_ et les _POST parameters_, les deux sont disponibles dans le Hash `params` de votre contrôleur :
 
 ```ruby
 class ClientsController < ActionController::Base
-  # Cet action utilise des query string parameters car elles ont été
-  # envoyé par une requête HTTP de type GET, mais cela ne fait aucune
-  # différence en ce qui concerne leur accès. L'URL pour cette action
-  # semble vouloir afficher la liste des clients activé
+  # Cette action utilise des paramètres de query string car
+  # elle est exécutée par une requête HTTP de type GET,
+  # mais cela ne fait aucune différence en ce qui concerne leur accès.
+  # Pour afficher la liste des clients activés, l'URL ressemblerait à :
+  # /clients?status=activated
   def index
     if params[:status] == "activated"
       @clients = Client.activated
@@ -119,16 +73,16 @@ class ClientsController < ActionController::Base
   end
 
   # Cette action utilise les paramètres de type POST. Ils viennent le
-  # plus souvent d'un formulaire HTML que l'utilisateur à envoyé. l'URL pour
-  # cette requête de type REST est "/clients", et les données seront
+  # plus souvent d'un formulaire HTML que l'utilisateur a envoyé. l'URL pour
+  # cette requête RESTful est "/clients" et les données seront
   # envoyées dans le corps de la requête.
   def create
     @client = Client.new(params[:client])
     if @client.save
       redirect_to @client
     else
-      # Cette ligne modifie le comportement de rendu par défaut,
-      # qui normalement était le rendu de la vue "create".
+      # Cette ligne surcharge le comportement de rendu par défaut
+      # qui aurait normalement été le rendu de la vue "create".
       render "new"
     end
   end
