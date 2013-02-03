@@ -38,7 +38,7 @@ class ClientsController < ApplicationController
 end
 ```
 
-Pour exemple, si un utilisateur va vers `/clients/new` dans notre application pour ajouter un nouveau client, Rails créera une instance de `ClientsController` et appellera la méthode `new`. Notez bien que la méthode vide utilisée dans l'exemple fonctionne car Rails rendra par défaut la vue `new.html.erb` sauf si l'action dit de faire différemment. La méthode `new` pourrait rendre visible pour la vue la variable d'instance `@client` en créant un nouveau `Client` :
+Pour exemple, si un utilisateur va vers `/clients/new` dans notre application pour ajouter un nouveau client, Rails créera une instance de `ClientsController` et appellera la méthode `new`. Notez bien que la méthode vide utilisée dans l'exemple fonctionne car Rails rendra par défaut la vue `new.html.erb` sauf si l'action dit de faire différemment. La méthode `new` pourrait rendre visible pour la vue la variable d'instance `@client` en créant un nouveau `Client` :
 
 ```ruby
 def new
@@ -62,7 +62,7 @@ class ClientsController < ActionController::Base
   # Cette action utilise des paramètres de query string car
   # elle est exécutée par une requête HTTP de type GET,
   # mais cela ne fait aucune différence en ce qui concerne leur accès.
-  # Pour afficher la liste des clients activés, l'URL ressemblerait à :
+  # Pour afficher la liste des clients activés, l'URL ressemblerait à :
   # /clients?status=activated
   def index
     if params[:status] == "activated"
@@ -142,15 +142,15 @@ Et supposons que vous envoyez les données à `CompaniesController`, il serait a
 
 Vous pouvez personnaliser le nom de la clef ou des paramètres spécifiques que vous voulez envelopper en consultant la [documentation de l'API](http://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html)
 
-### Routing Parameters
+### Paramètre du routage
 
-The `params` hash will always contain the `:controller` and `:action` keys, but you should use the methods `controller_name` and `action_name` instead to access these values. Any other parameters defined by the routing, such as `:id` will also be available. As an example, consider a listing of clients where the list can show either active or inactive clients. We can add a route which captures the `:status` parameter in a "pretty" URL:
+Le hash `params` contiendra toujours les clefs `:controller` et `:action`, mais vous devriez utiliser les méthodes `controller_name` et `action_name` à la place pour accéder à ces valeurs. Tous les autres paramètres définis par le routage, comme `:id` sera aussi disponible. Comme exemple, considérez un listing de clients où la liste peut montrer à la fois des clients actifs et inactifs. Nous pouvons ajouter une route qui capture le paramètre `:status` dans une "jolie" URL :
 
 ```ruby
 match '/clients/:status' => 'clients#index', foo: "bar"
 ```
 
-In this case, when a user opens the URL `/clients/active`, `params[:status]` will be set to "active". When this route is used, `params[:foo]` will also be set to "bar" just like it was passed in the query string. In the same way `params[:action]` will contain "index".
+Dans ce cas, quand un utilisateur ouvre l'URL `/clients/active`, `params[:status]` aura pour valeur "active". Quand cette route est utilisée, `params[:foo]` aura pour valeur "bar" de la même façon que si ça avait été passé par les paramètres de _query string_. De la même façon `params[:action]` contiendra la valeur "index".
 
 ### `default_url_options`
 
