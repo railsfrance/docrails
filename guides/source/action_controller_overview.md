@@ -91,7 +91,7 @@ end
 
 ### Paramètres de type `Hash` et `Array`
 
-les `params` de type hash ne sont pas limités aux clefs et valeurs à une dimension. Il peuvent contenir des tableaux et des hashs imbriqués. Pour envoyer un tableau de valeur, ajoutez une paire de crochets vide "[]" après le nom de la clef :
+Les `params` de type hash ne sont pas limités aux clefs et valeurs à une dimension. Il peuvent contenir des tableaux et des hashs imbriqués. Pour envoyer un tableau de valeur, ajoutez une paire de crochets vide "[]" après le nom de la clef :
 
 ```
 GET /clients?ids[]=1&ids[]=2&ids[]=3
@@ -99,7 +99,7 @@ GET /clients?ids[]=1&ids[]=2&ids[]=3
 
 À Noter : en réalité l'URL de cet exemple serait encodé comme ceci "/clients?ids%5b%5d=1&ids%5b%5d=2&ids%5b%5d=3" car "[" et "]" ne sont pas autorisés dans les URL. La plupart du temps il est inutile de s'inquiéter à propos de ça car le navigateur s'en charge pour vous, et Rails le décodera en retour quand il le recevra, mais si jamais vous avez besoin d'envoyer ces requêtes manuellement à un serveur vous devez avoir ça en tête.
 
-La valeur du `params[:ids]` sera maintenant `["1", "2", "3"]`. À noter que les valeurs de paramètres sont toujours du type `String` ; Rails ne fait rien pour deviner ou caster le type.
+La valeur du `params[:ids]` sera maintenant `["1", "2", "3"]`. À noter que les valeurs de paramètres sont toujours du type `String` ; Rails ne fait rien pour deviner ou transtyper le type.
 
 Pour envoyer un hash vous devez inclure le nom de la clef dans les crochets :
 
@@ -116,7 +116,7 @@ Quand ce formulaire est envoyé, la valeur de `params[:client]` serait `{"name" 
 
 Remarquez que le `params` de type hash est en réalité une instance de `HashWithIndifferentAccess` d'Active Support, qui se comporte comme un hash et vous laisse utiliser des symboles ou des chaines de caractères indifféremment comme clefs.
 
-### paramètres au format JSON/XML 
+### paramètres au format JSON/XML
 
 Si vous écrivez une application web, vous pourriez vous retrouver plus à l'aise d'accepter des paramètres aux format JSON ou XML. Rails convertira automatiquement vos paramètres en `params` de type hash, que vous pourrez accéder comme vous le feriez avec des données d'un formulaire.
 
@@ -144,7 +144,7 @@ Vous pouvez personnaliser le nom de la clef ou des paramètres spécifiques que 
 
 ### Paramètre du routage
 
-Le hash `params` contiendra toujours les clefs `:controller` et `:action`, mais vous devriez utiliser les méthodes `controller_name` et `action_name` à la place pour accéder à ces valeurs. Tous les autres paramètres définis par le routage, comme `:id` sera aussi disponible. Comme exemple, considérez un listing de clients où la liste peut montrer à la fois des clients actifs et inactifs. Nous pouvons ajouter une route qui capture le paramètre `:status` dans une "jolie" URL :
+Le hash `params` contiendra toujours les clefs `:controller` et `:action`, mais vous devriez utiliser les méthodes `controller_name` et `action_name` à la place pour accéder à ces valeurs. Tous les autres paramètres définis par le routage, comme `:id` sera aussi disponible. Par exemple, considérez un listing de clients où la liste peut montrer à la fois des clients actifs et inactifs. Nous pouvons ajouter une route qui capture le paramètre `:status` dans une "jolie" URL :
 
 ```ruby
 match '/clients/:status' => 'clients#index', foo: "bar"
@@ -154,7 +154,7 @@ Dans ce cas, quand un utilisateur ouvre l'URL `/clients/active`, `params[:status
 
 ### `default_url_options`
 
-You can set global default parameters for URL generation by defining a method called `default_url_options` in your controller. Such a method must return a hash with the desired defaults, whose keys must be symbols:
+Vous pouvez initialiser un paramètre global par défaut pour le générateur d'URL en définissant une méthode appelé `default_url_options` dans votre contrôleur. Cette méthode doit renvoyer un hash avec les valeurs par défauts voulu, ces clefs doivent être des symboles :
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -164,32 +164,31 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-These options will be used as a starting point when generating URLs, so it's possible they'll be overridden by the options passed in `url_for` calls.
+Ces options seront utilisées comme point de départ lors de la génération des URLs, il est donc possible qu'ils soient remplacés par les options passées dans la méthode `url_for`.
 
-If you define `default_url_options` in `ApplicationController`, as in the example above, it would be used for all URL generation. The method can also be defined in one specific controller, in which case it only affects URLs generated there.
-
+Si vous définissez `default_url_options` dans `ApplicationController`, comme dans l'exemple ci-dessus, il sera utilisé pour toutes les générations d'URL. La méthode peut également être définie dans un contrôleur spécifique, dans ce cas, il affecte uniquement les URLs générées du concernant ce contrôleur.
 
 Session
 -------
 
-Your application has a session for each user in which you can store small amounts of data that will be persisted between requests. The session is only available in the controller and the view and can use one of a number of different storage mechanisms:
+Votre application a une session pour chaque utilisateur dans laquelle vous pouvez stocker de petites quantités de données qui seront persisté entre les requêtes. La session est uniquement disponible dans le contrôleur et la vue et peut utiliser l'un de ces mécanismes de stockage différents :
 
-* `ActionDispatch::Session::CookieStore` - Stores everything on the client.
-* `ActionDispatch::Session::CacheStore` - Stores the data in the Rails cache.
-* `ActionDispatch::Session::ActiveRecordStore` - Stores the data in a database using Active Record. (require `activerecord-session_store` gem).
-* `ActionDispatch::Session::MemCacheStore` - Stores the data in a memcached cluster (this is a legacy implementation; consider using CacheStore instead).
+* `ActionDispatch::Session::CookieStore` - Stocke tout dans le navigateur.
+* `ActionDispatch::Session::CacheStore` - Stock les données dans le cache de Rails.
+* `ActionDispatch::Session::ActiveRecordStore` - Stocke les données dans une base de donnée en utilisant Active Record. (nécessite le gem `activerecord-session_store`).
+* `ActionDispatch::Session::MemCacheStore` - Stocke les données dans un cluster de type memcached (C'est une ancienne implémentation; utilisez à la place CacheStore).
 
-All session stores use a cookie to store a unique ID for each session (you must use a cookie, Rails will not allow you to pass the session ID in the URL as this is less secure).
+Toutes ces façons de stocker une session utilise un cookie pour stocker un identifiant unique pour chaque session (vous devez utiliser un cookie, Rails ne vous permettra pas de passer l'ID de session dans l'URL car cela est moins sûr).
 
-For most stores, this ID is used to look up the session data on the server, e.g. in a database table. There is one exception, and that is the default and recommended session store - the CookieStore - which stores all session data in the cookie itself (the ID is still available to you if you need it). This has the advantage of being very lightweight and it requires zero setup in a new application in order to use the session. The cookie data is cryptographically signed to make it tamper-proof, but it is not encrypted, so anyone with access to it can read its contents but not edit it (Rails will not accept it if it has been edited).
+Pour la plupart des enregistrements, cet ID est utilisé pour rechercher les données de session sur le serveur, par exemple, dans une table de base de données. Il y a une exception, et c'est la valeur par défaut et recommandée de stockage de session - par les Cookies - qui stocke les données de session dans le cookie lui-même (l'ID est toujours à votre disposition si vous en avez besoin). Ceci a l'avantage d'être très léger et ne nécessite aucune installation sur une nouvelle application pour utiliser la session. Les données cookie ont une signature cryptographique pour le rendre inviolable, mais il n'est pas cryptée, donc toute personne ayant accès à elle peut lire son contenu mais pas le modifier (Rails ne l'acceptera pas s'il a été modifié).
 
-The CookieStore can store around 4kB of data — much less than the others — but this is usually enough. Storing large amounts of data in the session is discouraged no matter which session store your application uses. You should especially avoid storing complex objects (anything other than basic Ruby objects, the most common example being model instances) in the session, as the server might not be able to reassemble them between requests, which will result in an error.
+L'enregistrement par cookie peut stocker environ 4 Ko de données - beaucoup moins que les autres - mais cela est généralement suffisant. Stocker de grandes quantités de données dans la session est déconseillée quel que soit le stockage de session utilisé par votre application. Vous devez surtout éviter de stocker des objets complexes (autre chose que des objets de base de Ruby, l'exemple le plus courant étant instances du modèle) dans la session, le serveur peut ne pas être en mesure de les réhabiliter entre les demandes, ce qui se traduira par une erreur.
 
-If your user sessions don't store critical data or don't need to be around for long periods (for instance if you just use the flash for messaging), you can consider using ActionDispatch::Session::CacheStore. This will store sessions using the cache implementation you have configured for your application. The advantage of this is that you can use your existing cache infrastructure for storing sessions without requiring any additional setup or administration. The downside, of course, is that the sessions will be ephemeral and could disappear at any time.
+Si vos sessions utilisateurs ne stockent pas de données critiques ou n'ont pas besoin d'être là pour de longues périodes (par exemple, si vous venez d'utiliser un message de type flash), vous pouvez envisager d'utiliser ActionDispatch::Session::CacheStore. Cela stockera les sessions en utilisant l'implémentation de cache que vous avez configuré pour votre application. L'avantage de ceci est que vous pouvez utiliser votre infrastructure existante pour stocker les sessions sans nécessiter de configuration supplémentaire ou de l'administration. L'inconvénient, bien sûr, est que les sessions seront éphémères et pourraient disparaître à tout moment.
 
-Read more about session storage in the [Security Guide](security.html).
+En savoir plus sur le stockage des sessions dans le [Guide de sécurité] (security.html)
 
-If you need a different session storage mechanism, you can change it in the `config/initializers/session_store.rb` file:
+Si vous avez besoin d'un mécanisme autre pour stocker les sessions, vous pouvez le modifier dans le fichier `config/initializers/session_store.rb` :
 
 ```ruby
 # Use the database for sessions instead of the cookie-based default,
@@ -198,21 +197,21 @@ If you need a different session storage mechanism, you can change it in the `con
 # YourApp::Application.config.session_store :active_record_store
 ```
 
-Rails sets up a session key (the name of the cookie) when signing the session data. These can also be changed in `config/initializers/session_store.rb`:
+Rails établit une clé de session (le nom du cookie) lors de la signature des données de session. Ceux-ci peuvent également être modifiés dans `config/initializers/session_store.rb`:
 
 ```ruby
 # Be sure to restart your server when you modify this file.
 YourApp::Application.config.session_store :cookie_store, key: '_your_app_session'
 ```
 
-You can also pass a `:domain` key and specify the domain name for the cookie:
+Vous pouvez également passer la clef `:domain` et spécifier le nom de domaine pour le cookie :
 
 ```ruby
 # Be sure to restart your server when you modify this file.
 YourApp::Application.config.session_store :cookie_store, key: '_your_app_session', domain: ".example.com"
 ```
 
-Rails sets up (for the CookieStore) a secret key used for signing the session data. This can be changed in `config/initializers/secret_token.rb`
+Rails met en place (pour le stockage par cookies) une clé secrète utilisée pour la signature des données de session. Ceci peut être modifié dans `config/initializers/secret_token.rb`.
 
 ```ruby
 # Be sure to restart your server when you modify this file.
@@ -224,25 +223,25 @@ Rails sets up (for the CookieStore) a secret key used for signing the session da
 YourApp::Application.config.secret_key_base = '49d3f3de9ed86c74b94ad6bd0...'
 ```
 
-NOTE: Changing the secret when using the `CookieStore` will invalidate all existing sessions.
+REMARQUE : La modification du jeton secret lorsque vous utilisez le `CookieStore` annulera toutes les sessions existantes.
 
-### Accessing the Session
+### Accéder à la Session
 
-In your controller you can access the session through the `session` instance method.
+Dans votre contrôleur, vous pouvez accéder à la session via la méthode `session`.
 
-NOTE: Sessions are lazily loaded. If you don't access sessions in your action's code, they will not be loaded. Hence you will never need to disable sessions, just not accessing them will do the job.
+REMARQUE : Les sessions sont chargées si besoin. Si vous n'avez pas accédé à des sessions dans le code de votre action, elles ne seront pas chargés. Par conséquent, vous n'aurez jamais besoin de désactiver les sessions, le fait de ne pas y accéder sera suffisant.
 
-Session values are stored using key/value pairs like a hash:
+Les valeurs de session sont stockées en utilisant les paires clé/valeur, comme un hash:
 
 ```ruby
 class ApplicationController < ActionController::Base
 
   private
 
-  # Finds the User with the ID stored in the session with the key
-  # :current_user_id This is a common way to handle user login in
-  # a Rails application; logging in sets the session value and
-  # logging out removes it.
+  # Trouve l'utilisateur avec l'ID stocké dans la session avec la clé
+  # :current_user_id Il s'agit d'une voie commune pour gérer la connexion de l'utilisateur dans une
+  # application Rails; se connecter fixe la valeur de session et
+  # la déconnexion la supprime.
   def current_user
     @_current_user ||= session[:current_user_id] &&
       User.find_by_id(session[:current_user_id])
@@ -250,15 +249,15 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-To store something in the session, just assign it to the key like a hash:
+Pour stocker quelque chose dans la session, il suffit de l'affecter à la clef comme un hash:
 
 ```ruby
 class LoginsController < ApplicationController
-  # "Create" a login, aka "log the user in"
+  # "Créé un login" autrement dit "connecter l'utilisateur"
   def create
     if user = User.authenticate(params[:username], params[:password])
-      # Save the user ID in the session so it can be used in
-      # subsequent requests
+      # Sauvegarde de l'ID utilisateur dans la session de sorte qu'il peut être utilisé
+      # dans les requêtes suivantes
       session[:current_user_id] = user.id
       redirect_to root_url
     end
@@ -266,28 +265,28 @@ class LoginsController < ApplicationController
 end
 ```
 
-To remove something from the session, assign that key to be `nil`:
+Pour supprimer quoique ce soit de la session, assigner la clef à `nil` :
 
 ```ruby
 class LoginsController < ApplicationController
-  # "Delete" a login, aka "log the user out"
+  # "Supprimer" une connexion, autrement dit "déconnecter un utilisateur"
   def destroy
-    # Remove the user id from the session
+    # Supprimer l'ID utilisateur de la session
     @_current_user = session[:current_user_id] = nil
     redirect_to root_url
   end
 end
 ```
 
-To reset the entire session, use `reset_session`.
+Pour réinitialiser toute la session, utilisez `reset_session`.
 
-### The Flash
+### Le flash
 
-The flash is a special part of the session which is cleared with each request. This means that values stored there will only be available in the next request, which is useful for passing error messages etc.
+Le flash est une partie spéciale de la session qui est effacée à chaque requête. Cela signifie que les valeurs qui y sont stockées ne seront disponibles que dans la requête suivante, qui est utile pour transmettre des messages d'erreur, etc.
 
-It is accessed in much the same way as the session, as a hash (it's a [FlashHash](http://api.rubyonrails.org/classes/ActionDispatch/Flash/FlashHash.html) instance).
+Il est accessible en grande partie de la même manière que la session, comme un hash (c'est une instance de [FlashHash](http://api.rubyonrails.org/classes/ActionDispatch/Flash/FlashHash.html)).
 
-Let's use the act of logging out as an example. The controller can send a message which will be displayed to the user on the next request:
+Profitons de l'acte de se déconnecter à titre d'exemple. Le contrôleur peut envoyer un message qui sera affiché à l'utilisateur sur la demande suivante:
 
 ```ruby
 class LoginsController < ApplicationController
@@ -299,7 +298,7 @@ class LoginsController < ApplicationController
 end
 ```
 
-Note that it is also possible to assign a flash message as part of the redirection. You can assign `:notice`, `:alert` or the general purpose `:flash`:
+Notez qu'il est également possible d'assigner un message flash dans le cadre de la redirection. Vous pouvez assigner `:notice`, `:alert` ou de manière générale `:flash` :
 
 ```ruby
 redirect_to root_url, notice: "You have successfully logged out."
@@ -307,7 +306,8 @@ redirect_to root_url, alert: "You're stuck here!"
 redirect_to root_url, flash: { referral_code: 1234 }
 ```
 
-The `destroy` action redirects to the application's `root_url`, where the message will be displayed. Note that it's entirely up to the next action to decide what, if anything, it will do with what the previous action put in the flash. It's conventional to display any error alerts or notices from the flash in the application's layout:
+L'action `destroy` redirige vers `root_url` de l'application, où le message sera affiché. Notez que c'est à la prochaine action de décider, le cas échéant, ce qu'il faudra faire avec ce que l'action précédente à mise dans le flash.
+Par convention nous affichons tous les messages d'erreur ou les informations du flash dans le rendu de l'application :
 
 ```erb
 <html>
@@ -322,9 +322,9 @@ The `destroy` action redirects to the application's `root_url`, where the messag
 </html>
 ```
 
-This way, if an action sets a notice or an alert message, the layout will display it automatically.
+De cette façon, si une action renvoie un avis ou un message d'alerte, la mise en page l'affichera automatiquement.
 
-You can pass anything that the session can store; you're not limited to notices and alerts:
+Vous pouvez passer quoi que ce soit que la session peut stocker, vous n'êtes pas limité aux notifications et des alertes.
 
 ```erb
 <% if flash[:just_signed_up] %>
@@ -332,20 +332,20 @@ You can pass anything that the session can store; you're not limited to notices 
 <% end %>
 ```
 
-If you want a flash value to be carried over to another request, use the `keep` method:
+Si vous voulez qu'une valeur soit reportées à une autre demande, utilisez la méthode `keep` :
 
 ```ruby
 class MainController < ApplicationController
-  # Let's say this action corresponds to root_url, but you want
-  # all requests here to be redirected to UsersController#index.
-  # If an action sets the flash and redirects here, the values
-  # would normally be lost when another redirect happens, but you
-  # can use 'keep' to make it persist for another request.
+  # Disons que cette action correspond à root_url, mais vous voulez
+  # que toutes les demandes soit redirigé vers UsersController#index.
+  # Si une action met à jour le flash et redirige ici, les valeurs
+  # serait normalement perdue lors d'une autre redirection, mais vous
+  # pouvez utiliser 'keep' pour le faire persister pour une autre requete.
   def index
-    # Will persist all flash values.
+    # Cela va persister toutes les valeurs de flash.
     flash.keep
 
-    # You can also use a key to keep only some kind of value.
+    # Vous pouvez aussi utiliser une clef pour garder uniquement un type de valeur
     # flash.keep(:notice)
     redirect_to users_url
   end
